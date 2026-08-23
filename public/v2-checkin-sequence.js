@@ -18,7 +18,7 @@
   function stopCamera() {
     if (cameraStream) cameraStream.getTracks().forEach(track => track.stop());
     cameraStream = null;
-    const video = document.getElementById('cameraVideo');
+    const video = document.getElementById('v2FaceVideo') || document.getElementById('cameraVideo');
     if (video?.srcObject) {
       try { video.srcObject.getTracks().forEach(track => track.stop()); } catch (_) {}
       video.srcObject = null;
@@ -114,60 +114,9 @@
       return;
     }
     customFlowActive = true;
+    faceVerifiedThisAttempt = new Set();
     stopCamera();
-    await renderWristbands();
-  }
-
-  async function renderWristbands() {
-    customFlowActive = true;
-    stopCamera();
-    let bundle;
-    try { bundle = await refreshBundle(); } catch (error) { return notify(error.message, true); }
-    const adults = bundle.guests.filter(guest => guest.adult);
-    const next = adults.find(guest => !String(guest.wristband_code || '').trim());
-
-    app.innerHTML = `<section class="panel-card" data-v2-checkin-sequence="wristbands">
-      ${header(5, 'Grave as pulseiras', `Será gravada uma pulseira NFC para cada hóspede adulto (${adults.length}).`)}
-      <div class="scan-box">
-        <i class="bi bi-wifi scan-icon"></i>
-        <h2 class="h4 fw-bold mt-3">${next ? `Aproxime a pulseira de ${esc(next.name)}` : 'Todas as pulseiras foram gravadas'}</h2>
-        <p class="text-secondary">Leitor/gravador previsto: ACS ACR122U.</p>
-        ${next
-          ? '<button class="btn btn-primary btn-touch mt-3" id="v2EncodeBand"><i class="bi bi-broadcast me-2"></i>Gravar pulseira</button>'
-          : '<span class="status-pill status-ok mt-2"><i class="bi bi-check-circle"></i>Concluído</span>'}
-      </div>
-      <div class="wristband-list">
-        ${adults.map((guest, index) => `<div class="wristband-item">
-          <span><strong>Pulseira ${index + 1}</strong> · ${esc(guest.name)}</span>
-          ${guest.wristband_code
-            ? '<span class="status-pill status-ok">Gravada</span>'
-            : '<span class="status-pill status-pending">Aguardando</span>'}
-        </div>`).join('')}
-      </div>
-      ${actions({ action: 'wristbands-ok', label: 'Avançar para reconhecimento facial', disabled: Boolean(next) })}
-    </section>`;
-    bindCancel();
-
-    const encode = document.getElementById('v2EncodeBand');
-    if (encode && next) {
-      encode.onclick = async () => {
-        try {
-          encode.disabled = true;
-          encode.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gravando...';
-          const result = await json(`/api/reservations/${activeReservationId}/wristbands/encode`, {
-            method: 'POST', body: JSON.stringify({ guest_id: next.id })
-          });
-          notify(`Pulseira gravada: ${result.code}`);
-          await renderWristbands();
-        } catch (error) {
-          notify(error.message, true);
-          await renderWristbands();
-        }
-      };
-    }
-
-    const advance = app.querySelector('[data-v2-action="wristbands-ok"]');
-    if (advance) advance.onclick = renderFace;
+    await renderFace();
   }
 
   async function openCamera() {
@@ -185,7 +134,7 @@
     customFlowActive = true;
     let config;
     try { config = await json('/api/config', { cache: 'no-store' }); } catch (error) { return notify(error.message, true); }
-    if (!config.require_face_match) return renderPayment();
+    if (!config.require_face_match) return renderGovbr();
 
     let bundle;
     try { bundle = await refreshBundle(); } catch (error) { return notify(error.message, true); }
@@ -193,11 +142,11 @@
     const next = adults.find(guest => !faceVerifiedThisAttempt.has(guest.id));
     if (!next) {
       stopCamera();
-      return renderPayment();
+      return renderGovbr();
     }
 
     app.innerHTML = `<section class="panel-card" data-v2-checkin-sequence="face">
-      ${header(6, 'Reconhecimento facial', `Posicione ${next.name} em frente à câmera para comparar o rosto com o documento enviado.`)}
+      ${header(4, 'Reconhecimento facial', `Posicione ${esc(next.name)} em frente à câmera para comparar o rosto com o documento enviado.`)}
       <div class="camera-box">
         <video id="v2FaceVideo" autoplay playsinline muted></video>
         <canvas id="v2FaceCanvas" class="d-none"></canvas>
@@ -216,7 +165,7 @@
 
     try {
       await openCamera();
-    } catch (error) {
+    } catch (_) {
       notify('Não foi possível abrir a webcam. Verifique o HTTPS, a permissão e a conexão USB.', true);
     }
 
@@ -248,6 +197,104 @@
         capture.innerHTML = '<i class="bi bi-camera me-2"></i>Capturar e validar';
       }
     };
+  }
+
+  async function renderGovbr() {
+    customFlowActive = true;
+    stopCamera();
+
+    let config;
+    try { config = await json('/api/config', { cache: 'no-store' }); } catch (error) { return notify(error.message, true); }
+    if (!config.require_govbr) return renderWristbands();
+
+    let bundle;
+    try { bundle = await refreshBundle(); } catch (error) { return notify(error.message, true); }
+    const verified = Boolean(bundle.state?.govbr_verified);
+
+    app.innerHTML = `<section class="panel-card" data-v2-checkin-sequence="govbr">
+      ${header(5, 'Validação gov.br', 'O responsável deverá autenticar sua identidade pelo fluxo oficial do gov.br.')}
+      <div class="scan-box">
+        <i class="bi bi-shield-check scan-icon"></i>
+        <h2 class="h4 fw-bold mt-3">Autenticação segura</h2>
+        <p class="text-secondary">Escolha usar o celular pelo QR Code ou realizar o processo diretamente neste totem.</p>
+        <button class="btn btn-primary btn-touch mt-3" id="govBtn" ${verified ? 'disabled' : ''}>
+          <i class="bi ${verified ? 'bi-check2-circle' : 'bi-box-arrow-up-right'} me-2"></i>${verified ? 'Autenticação concluída' : 'Entrar com gov.br'}
+        </button>
+      </div>
+      ${actions({ action: 'govbr-ok', label: 'Avançar para pulseiras', disabled: !verified })}
+    </section>`;
+    bindCancel();
+
+    const govButton = document.getElementById('govBtn');
+    if (govButton && !verified) {
+      govButton.onclick = async () => {
+        try {
+          govButton.disabled = true;
+          govButton.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Confirmando...';
+          await json(`/api/reservations/${activeReservationId}/govbr/verify`, { method: 'POST', body: '{}' });
+          notify('Autenticação gov.br registrada no modo de demonstração.');
+          await renderGovbr();
+        } catch (error) {
+          notify(error.message, true);
+          await renderGovbr();
+        }
+      };
+    }
+
+    const advance = app.querySelector('[data-v2-action="govbr-ok"]');
+    if (advance) advance.onclick = renderWristbands;
+  }
+
+  async function renderWristbands() {
+    customFlowActive = true;
+    stopCamera();
+    let bundle;
+    try { bundle = await refreshBundle(); } catch (error) { return notify(error.message, true); }
+    const adults = bundle.guests.filter(guest => guest.adult);
+    const next = adults.find(guest => !String(guest.wristband_code || '').trim());
+
+    app.innerHTML = `<section class="panel-card" data-v2-checkin-sequence="wristbands">
+      ${header(6, 'Grave as pulseiras', `Será gravada uma pulseira NFC para cada hóspede adulto (${adults.length}).`)}
+      <div class="scan-box">
+        <i class="bi bi-wifi scan-icon"></i>
+        <h2 class="h4 fw-bold mt-3">${next ? `Aproxime a pulseira de ${esc(next.name)}` : 'Todas as pulseiras foram gravadas'}</h2>
+        <p class="text-secondary">Leitor/gravador previsto: ACS ACR122U.</p>
+        ${next
+          ? '<button class="btn btn-primary btn-touch mt-3" id="v2EncodeBand"><i class="bi bi-broadcast me-2"></i>Gravar pulseira</button>'
+          : '<span class="status-pill status-ok mt-2"><i class="bi bi-check-circle"></i>Concluído</span>'}
+      </div>
+      <div class="wristband-list">
+        ${adults.map((guest, index) => `<div class="wristband-item">
+          <span><strong>Pulseira ${index + 1}</strong> · ${esc(guest.name)}</span>
+          ${guest.wristband_code
+            ? '<span class="status-pill status-ok">Gravada</span>'
+            : '<span class="status-pill status-pending">Aguardando</span>'}
+        </div>`).join('')}
+      </div>
+      ${actions({ action: 'wristbands-ok', label: 'Avançar para pagamento', disabled: Boolean(next) })}
+    </section>`;
+    bindCancel();
+
+    const encode = document.getElementById('v2EncodeBand');
+    if (encode && next) {
+      encode.onclick = async () => {
+        try {
+          encode.disabled = true;
+          encode.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Gravando...';
+          const result = await json(`/api/reservations/${activeReservationId}/wristbands/encode`, {
+            method: 'POST', body: JSON.stringify({ guest_id: next.id })
+          });
+          notify(`Pulseira gravada: ${result.code}`);
+          await renderWristbands();
+        } catch (error) {
+          notify(error.message, true);
+          await renderWristbands();
+        }
+      };
+    }
+
+    const advance = app.querySelector('[data-v2-action="wristbands-ok"]');
+    if (advance) advance.onclick = renderPayment;
   }
 
   async function renderPayment() {
@@ -335,25 +382,23 @@
     }
   }
 
-  // Ao avançar no gov.br, substitui a sequência antiga (facial antes da pulseira)
-  // pela sequência V2 definida pelo produto: pulseira -> facial -> pagamento.
+  // A V2 assume o fluxo imediatamente após a documentação estar completa.
+  // Ordem: documentos -> facial -> gov.br -> pulseiras -> pagamento.
   document.addEventListener('click', event => {
-    const button = event.target.closest?.('[data-action="gov-ok"]');
+    const button = event.target.closest?.('[data-action="docs-ok"]');
     if (!button || button.disabled) return;
-    const title = app.querySelector('.step-title')?.textContent?.toLowerCase() || '';
-    if (!title.includes('gov.br')) return;
+    const title = app.querySelector('.step-title')?.textContent?.trim().toLowerCase() || '';
+    if (!title.includes('confira os documentos')) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     startSequence().catch(error => notify(error.message, true));
   }, true);
 
-  // Compatibilidade com require_govbr=0 e com reservas antigas que já tinham
-  // face_verified persistido: se a aplicação-base chegar à tela facial ou de
-  // pulseiras, a V2 assume o restante do fluxo e não deixa essas etapas sumirem.
+  // Compatibilidade para instalações já no meio do fluxo antigo.
   const observer = new MutationObserver(() => {
     if (customFlowActive || app.querySelector('[data-v2-checkin-sequence]')) return;
     const title = app.querySelector('.step-title')?.textContent?.trim().toLowerCase() || '';
-    if (title.includes('validação facial') || title.includes('grave as pulseiras')) {
+    if (title.includes('validação facial') || title.includes('validação gov.br') || title.includes('grave as pulseiras')) {
       const video = app.querySelector('video');
       if (video?.srcObject) {
         try { video.srcObject.getTracks().forEach(track => track.stop()); } catch (_) {}
