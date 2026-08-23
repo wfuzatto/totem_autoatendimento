@@ -1,30 +1,38 @@
 const fs = require('fs');
 const http = require('http');
 const https = require('https');
+const express = require('express');
 
-// Compatibilidade SQLite da V2: a implementação-base antiga compara a pulseira
-// com "" em uma consulta SQL. Em versões atuais do SQLite, aspas duplas são
-// identificadores e isso resulta em `no such column: ""`. Interceptamos apenas
-// essa consulta legada e a normalizamos para o literal SQL correto: ''.
+// Compatibilidades SQLite da V2 para consultas legadas e instalações que ainda
+// carregam trechos antigos do fluxo. Mantemos as normalizações concentradas aqui.
 const { db } = require('./db');
 const originalPrepare = db.prepare.bind(db);
 db.prepare = sql => {
-  const normalized = typeof sql === 'string'
-    ? sql.replaceAll('wristband_code != ""', "wristband_code != ''")
-    : sql;
+  let normalized = sql;
+  if (typeof normalized === 'string') {
+    normalized = normalized.replaceAll('wristband_code != ""', "wristband_code != ''");
+    normalized = normalized.replace("VALUES(?,?,?,?,?,?,'reserved',?,?,?,?,?)", "VALUES(?,?,?,?,?,?,'reserved',?,?,?,?)");
+  }
   return originalPrepare(normalized);
 };
 
-const app = require('./server-runtime');
+const coreApp = require('./server-runtime');
 const { installCheckoutRuntime } = require('./checkout-runtime');
 const { installDocumentRemovalRuntime } = require('./document-removal-runtime');
 const { installV2Runtime } = require('./v2-runtime');
 const { installReservationAdminRuntime } = require('./reservation-admin-runtime');
+const { installHybridReservationLookup } = require('./hybrid-reservation-lookup');
 
-installCheckoutRuntime(app);
-installDocumentRemovalRuntime(app);
-installV2Runtime(app);
-installReservationAdminRuntime(app);
+installCheckoutRuntime(coreApp);
+installDocumentRemovalRuntime(coreApp);
+installV2Runtime(coreApp);
+installReservationAdminRuntime(coreApp);
+
+// A camada externa permite que reservas locais/manuais continuem disponíveis
+// mesmo quando o provider de hotelaria estiver apontando para a integração real.
+const app = express();
+installHybridReservationLookup(app);
+app.use(coreApp);
 
 function start() {
   const port = Number(process.env.PORT || 3080);
