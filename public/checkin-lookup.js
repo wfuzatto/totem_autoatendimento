@@ -9,6 +9,9 @@
   let lastQrAt = 0;
   let enhanced = false;
 
+  const QR_PROCESSING_MIN_MS = 3000;
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, Math.max(0, ms)));
+
   const cpfValid = value => {
     const cpf = String(value || '').replace(/\D/g, '');
     if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
@@ -27,6 +30,34 @@
     el.className = `lookup-message ${danger ? 'lookup-message-error' : 'lookup-message-ok'}`;
     el.textContent = message || '';
   };
+
+  function showQrProcessing() {
+    let overlay = document.getElementById('qrProcessingOverlay');
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.id = 'qrProcessingOverlay';
+      overlay.className = 'qr-processing-overlay';
+      overlay.setAttribute('role', 'status');
+      overlay.setAttribute('aria-live', 'polite');
+      overlay.setAttribute('aria-label', 'QR Code lido. Processando sua reserva.');
+      overlay.innerHTML = `
+        <div class="qr-processing-card">
+          <div class="qr-processing-spinner" aria-hidden="true"></div>
+          <h2>QR Code lido</h2>
+          <p>Processando sua reserva...</p>
+          <small>Aguarde um momento</small>
+        </div>`;
+      document.body.appendChild(overlay);
+    }
+    requestAnimationFrame(() => overlay.classList.add('show'));
+  }
+
+  function hideQrProcessing() {
+    const overlay = document.getElementById('qrProcessingOverlay');
+    if (!overlay) return;
+    overlay.classList.remove('show');
+    setTimeout(() => overlay.remove(), 180);
+  }
 
   async function lookup(query, type) {
     const response = await fetch('/api/reservations/lookup', {
@@ -96,17 +127,26 @@
 
   async function validateQr(raw, originalInput, originalButton) {
     const now = Date.now();
-    if (raw === lastQr && now - lastQrAt < 2200) return;
+    if (raw === lastQr && now - lastQrAt < 3500) return;
     lastQr = raw;
     lastQrAt = now;
-    setMessage('qrLookupMessage', 'QR Code detectado. Validando...', false);
+
+    const processingStartedAt = Date.now();
+    setMessage('qrLookupMessage', 'QR Code detectado. Processando...', false);
+    showQrProcessing();
+
     try {
       const result = await lookup(raw, 'qr');
+      await sleep(QR_PROCESSING_MIN_MS - (Date.now() - processingStartedAt));
       setMessage('qrLookupMessage', 'Reserva encontrada.', false);
       stopScanner();
+      hideQrProcessing();
       originalInput.value = result.reservation.reservation_number;
       originalButton.click();
     } catch (_) {
+      await sleep(QR_PROCESSING_MIN_MS - (Date.now() - processingStartedAt));
+      hideQrProcessing();
+      lastQrAt = Date.now();
       setMessage('qrLookupMessage', 'QR Code inválido', true);
     }
   }
@@ -203,6 +243,7 @@
     bridge.append(originalInput, originalButton, originalCancel);
 
     document.getElementById('enhancedLookupCancel').onclick = () => {
+      hideQrProcessing();
       stopScanner();
       enhanced = false;
       originalCancel.click();
