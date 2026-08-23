@@ -3,16 +3,15 @@ const http = require('http');
 const https = require('https');
 const express = require('express');
 
-// Compatibilidades SQLite da V2 para consultas legadas e instalações que ainda
-// carregam trechos antigos do fluxo. Mantemos as normalizações concentradas aqui.
+// Compatibilidade SQLite da V2: a implementação-base antiga compara a pulseira
+// com "" em uma consulta SQL. Em versões atuais do SQLite, aspas duplas são
+// identificadores e isso resulta em `no such column: ""`.
 const { db } = require('./db');
 const originalPrepare = db.prepare.bind(db);
 db.prepare = sql => {
-  let normalized = sql;
-  if (typeof normalized === 'string') {
-    normalized = normalized.replaceAll('wristband_code != ""', "wristband_code != ''");
-    normalized = normalized.replace("VALUES(?,?,?,?,?,?,'reserved',?,?,?,?,?)", "VALUES(?,?,?,?,?,?,'reserved',?,?,?,?)");
-  }
+  const normalized = typeof sql === 'string'
+    ? sql.replaceAll('wristband_code != ""', "wristband_code != ''")
+    : sql;
   return originalPrepare(normalized);
 };
 
