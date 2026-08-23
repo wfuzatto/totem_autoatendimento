@@ -13,6 +13,7 @@ process.env.PRINT_JOB_DIR = path.join(temp, 'print-jobs');
 process.env.ADMIN_PASSWORD = '251933';
 
 const app = require('../src/server-main');
+const { db } = require('../src/db');
 
 test('totem pode remover documento recebido antes de concluir o check-in', async () => {
   const lookup = await request(app)
@@ -109,4 +110,35 @@ test('administrador pode configurar link HTTPS do gov.br para o iframe do totem'
   assert.equal(cleared.status, 200);
   assert.equal(cleared.body.govbr_iframe_configured, false);
   assert.equal(cleared.body.govbr_hotel_url, null);
+});
+
+test('grava todas as pulseiras e conclui check-in sem erro de literal SQL', async () => {
+  const lookup = await request(app)
+    .post('/api/reservations/lookup')
+    .send({ query: 'RES-20080', type: 'reservation' });
+  assert.equal(lookup.status, 200);
+
+  const reservationId = lookup.body.reservation.id;
+  db.prepare("UPDATE documents SET status='received', uploaded_at=CURRENT_TIMESTAMP WHERE reservation_id=?").run(reservationId);
+  db.prepare('UPDATE guests SET face_verified=1 WHERE reservation_id=? AND adult=1').run(reservationId);
+  db.prepare(`INSERT INTO process_state(reservation_id,govbr_verified,updated_at) VALUES(?,1,CURRENT_TIMESTAMP)
+    ON CONFLICT(reservation_id) DO UPDATE SET govbr_verified=1,updated_at=CURRENT_TIMESTAMP`).run(reservationId);
+  db.prepare("UPDATE reservations SET status='reserved',payment_pending=0,balance_cents=0 WHERE id=?").run(reservationId);
+
+  const guests = db.prepare('SELECT id FROM guests WHERE reservation_id=? AND adult=1 ORDER BY id').all(reservationId);
+  assert.ok(guests.length > 0);
+
+  for (const [index, guest] of guests.entries()) {
+    const encoded = await request(app)
+      .post(`/api/reservations/${reservationId}/wristbands/encode`)
+      .send({ guest_id: guest.id, code: `TEST-V2-${index + 1}` });
+    assert.equal(encoded.status, 200);
+    assert.equal(encoded.body.ok, true);
+  }
+
+  const checkin = await request(app)
+    .post(`/api/reservations/${reservationId}/checkin`)
+    .send({});
+  assert.equal(checkin.status, 200);
+  assert.equal(checkin.body.ok, true);
 });
