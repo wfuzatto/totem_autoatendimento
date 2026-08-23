@@ -13,6 +13,7 @@
   let layoutMode = 'text';
   let shift = false;
   let lastIframeFocused = false;
+  let keyAudioContext = null;
 
   const isElectronBridge = () => Boolean(window.kiosk && typeof window.kiosk.sendVirtualKey === 'function');
   const canRememberIframe = () => Boolean(window.kiosk && typeof window.kiosk.rememberVirtualKeyboardTarget === 'function');
@@ -37,6 +38,33 @@
   function keyDescriptor(item) {
     if (typeof item === 'string') return { action:'char', value:item, label:item };
     return item;
+  }
+
+  function playKeyToc() {
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      if (!keyAudioContext) keyAudioContext = new AudioContextClass();
+      if (keyAudioContext.state === 'suspended') keyAudioContext.resume().catch(() => {});
+
+      const now = keyAudioContext.currentTime;
+      const oscillator = keyAudioContext.createOscillator();
+      const gain = keyAudioContext.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(620, now);
+      oscillator.frequency.exponentialRampToValueAtTime(380, now + 0.042);
+
+      gain.gain.setValueAtTime(0.045, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.045);
+
+      oscillator.connect(gain);
+      gain.connect(keyAudioContext.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.048);
+    } catch (_) {
+      // Feedback sonoro nunca deve interferir na digitação.
+    }
   }
 
   function rememberIframeTarget() {
@@ -72,6 +100,7 @@
       event.preventDefault();
       event.stopPropagation();
       if (!key) return;
+      playKeyToc();
       handleKey(key.dataset.oskAction, key.dataset.oskValue || '');
     }, true);
 
