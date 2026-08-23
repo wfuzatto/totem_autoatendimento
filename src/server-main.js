@@ -19,10 +19,12 @@ const app = require('./server-runtime');
 const { installCheckoutRuntime } = require('./checkout-runtime');
 const { installDocumentRemovalRuntime } = require('./document-removal-runtime');
 const { installV2Runtime } = require('./v2-runtime');
+const { installReservationAdminRuntime } = require('./reservation-admin-runtime');
 
 installCheckoutRuntime(app);
 installDocumentRemovalRuntime(app);
 installV2Runtime(app);
+installReservationAdminRuntime(app);
 
 function start() {
   const port = Number(process.env.PORT || 3080);
