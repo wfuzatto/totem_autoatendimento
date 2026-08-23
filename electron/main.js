@@ -1,9 +1,10 @@
-const { app, BrowserWindow, ipcMain, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut, session } = require('electron');
 const path = require('path');
 
 let win;
 let exitAllowed = false;
 const kioskUrl = process.env.TOTEM_URL || 'http://127.0.0.1:3080';
+const kioskOrigin = new URL(kioskUrl).origin;
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
@@ -35,6 +36,18 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // O kiosk pode usar webcam sem depender de um popup de permissão que ficaria
+  // escondido em fullscreen. A autorização fica restrita à origem local do totem.
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) => {
+    return permission === 'media' && requestingOrigin === kioskOrigin;
+  });
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const requestOrigin = (() => {
+      try { return new URL(webContents.getURL()).origin; } catch (_) { return ''; }
+    })();
+    callback(permission === 'media' && requestOrigin === kioskOrigin);
+  });
+
   createWindow();
   ['CommandOrControl+R','CommandOrControl+W','CommandOrControl+L','CommandOrControl+T','CommandOrControl+N','F12','Alt+Left','Alt+Right','Alt+F4'].forEach(key => {
     try { globalShortcut.register(key, () => {}); } catch (_) {}
