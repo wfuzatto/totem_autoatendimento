@@ -1,0 +1,48 @@
+.v2-final-ad-slot {
+  width: min(100%, 760px);
+  margin: 1.5rem auto 0;
+  padding: 0.75rem;
+  border: 1px solid rgba(0, 107, 60, 0.18);
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(18, 67, 43, 0.08);
+  overflow: hidden;
+}
+
+.v2-final-ad-slot img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.v2-final-ad-slot.is-loading {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  color: #66736c;
+}
+
+.v2-final-ad-slot.is-error {
+  display: none;
+}
+
+.success-screen #v2FinishHome,
+.checkout-complete-screen #checkoutFinishHome {
+  min-width: 210px;
+}
+
+@media (max-width: 768px) {
+  .v2-final-ad-slot {
+    width: 100%;
+    padding: 0.5rem;
+    border-radius: 16px;
+  }
+
+  .v2-final-ad-slot img {
+    max-height: 320px;
+    border-radius: 11px;
+  }
+}
