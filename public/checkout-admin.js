@@ -1,6 +1,19 @@
 (() => {
   let injecting = false;
 
+  function mediaUrl(url) {
+    if (!url) return null;
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (/\/api\/branding\/checkout-ad$/i.test(parsed.pathname)) parsed.pathname = '/api/v2/media/checkout-ad';
+      parsed.protocol = window.location.protocol;
+      parsed.host = window.location.host;
+      return parsed.href;
+    } catch (_) {
+      return '/api/v2/media/checkout-ad';
+    }
+  }
+
   async function api(url, options = {}) {
     const token = sessionStorage.getItem('totem-admin-token');
     if (!token) throw new Error('Sessão administrativa expirada.');
@@ -18,8 +31,9 @@
     if (!preview) return;
     try {
       const data = await api('/api/admin/checkout-settings');
-      preview.innerHTML = data.ad_url
-        ? `<img src="${data.ad_url}" alt="Propaganda atual do checkout"><div class="checkout-ad-admin-overlay"><i class="bi bi-cloud-arrow-up-fill"></i><span>Clique para trocar o PNG</span></div>`
+      const previewUrl = data.ad_url ? mediaUrl(data.ad_url) : null;
+      preview.innerHTML = previewUrl
+        ? `<img src="${previewUrl}" alt="Propaganda atual do checkout"><div class="checkout-ad-admin-overlay"><i class="bi bi-cloud-arrow-up-fill"></i><span>Clique para trocar o PNG</span></div>`
         : '<div class="checkout-ad-empty"><i class="bi bi-image"></i><strong>Enviar propaganda PNG</strong><small>Será exibida por 30 segundos após o checkout.</small></div>';
       const remove = document.getElementById('removeCheckoutAd');
       if (remove) remove.hidden = !data.ad_url;
