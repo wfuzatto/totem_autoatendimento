@@ -1,0 +1,355 @@
+/* Skin system - visual identity is selected by body[data-skin]. */
+:root {
+  --brand-primary: #006b3c;
+  --brand-primary-rgb: 0, 107, 60;
+  --brand-secondary: #73b842;
+  --brand-accent: #f6c515;
+  --brand-soft: #edf6e8;
+  --brand-soft-2: #f8fbf5;
+  --brand-border: #dce9d8;
+}
+
+body[data-skin="vale_mantiqueira"] {
+  --kiosk-bg: #f3f7ef;
+  --kiosk-card: #ffffff;
+  --kiosk-text: #153027;
+  --kiosk-muted: #68776e;
+  --kiosk-primary: var(--brand-primary);
+  background:
+    radial-gradient(circle at 50% -15%, rgba(115,184,66,.16), transparent 36%),
+    linear-gradient(180deg, #ffffff 0%, #f7faf4 48%, #eef5e9 100%);
+}
+
+body[data-skin="neutral"] {
+  --kiosk-bg: #f4f7fb;
+  --kiosk-card: #ffffff;
+  --kiosk-text: #172033;
+  --kiosk-muted: #667085;
+  --kiosk-primary: #0d6efd;
+  --brand-primary: #0d6efd;
+  --brand-primary-rgb: 13, 110, 253;
+  --brand-secondary: #4c8dff;
+  --brand-accent: #9cc3ff;
+  --brand-soft: #eaf2ff;
+  --brand-soft-2: #f3f7ff;
+  --brand-border: #e2e8f0;
+}
+
+/* Header / logo. The original logo file is never recolored, distorted or rebuilt. */
+.kiosk-header {
+  overflow: visible;
+}
+
+body[data-skin="vale_mantiqueira"] .kiosk-header {
+  min-height: 112px;
+  background: rgba(255,255,255,.97);
+  border-bottom: 0;
+  box-shadow: 0 8px 28px rgba(0,75,42,.07);
+}
+
+body[data-skin="vale_mantiqueira"] .kiosk-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -4px;
+  height: 4px;
+  background: linear-gradient(90deg,
+    var(--brand-primary) 0 45%,
+    var(--brand-secondary) 45% 80%,
+    var(--brand-accent) 80% 100%);
+}
+
+.brand-logo-frame {
+  width: clamp(285px, 34vw, 430px);
+  max-width: calc(100vw - 145px);
+  line-height: 0;
+  flex: 0 1 auto;
+}
+
+.brand-logo {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 82px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+body[data-skin="vale_mantiqueira"] .generic-brand-mark,
+body[data-skin="vale_mantiqueira"] .brand-copy {
+  display: none;
+}
+
+body[data-skin="neutral"] .brand-logo-frame {
+  display: none;
+}
+
+body[data-skin="neutral"] .generic-brand-mark {
+  background: linear-gradient(135deg, #0d6efd, #4c8dff);
+}
+
+body[data-skin="vale_mantiqueira"] .icon-btn {
+  background: #f0f6ec;
+  color: var(--brand-primary);
+  border: 1px solid #dfeadb;
+}
+
+body[data-skin="vale_mantiqueira"] .icon-btn:hover,
+body[data-skin="vale_mantiqueira"] .icon-btn:focus-visible {
+  background: var(--brand-primary);
+  color: #fff;
+}
+
+/* Bootstrap brand overrides */
+body[data-skin="vale_mantiqueira"] .btn-primary {
+  --bs-btn-bg: var(--brand-primary);
+  --bs-btn-border-color: var(--brand-primary);
+  --bs-btn-hover-bg: #005a32;
+  --bs-btn-hover-border-color: #00532f;
+  --bs-btn-active-bg: #004e2b;
+  --bs-btn-active-border-color: #004e2b;
+  --bs-btn-disabled-bg: #7aa78f;
+  --bs-btn-disabled-border-color: #7aa78f;
+}
+
+body[data-skin="vale_mantiqueira"] .btn-outline-primary {
+  --bs-btn-color: var(--brand-primary);
+  --bs-btn-border-color: var(--brand-primary);
+  --bs-btn-hover-bg: var(--brand-primary);
+  --bs-btn-hover-border-color: var(--brand-primary);
+  --bs-btn-active-bg: #005a32;
+  --bs-btn-active-border-color: #005a32;
+}
+
+body[data-skin="vale_mantiqueira"] .form-control:focus,
+body[data-skin="vale_mantiqueira"] .form-select:focus {
+  border-color: #79b957;
+  box-shadow: 0 0 0 .25rem rgba(var(--brand-primary-rgb), .14);
+}
+
+body[data-skin="vale_mantiqueira"] .form-check-input:checked {
+  background-color: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+/* Main kiosk surfaces */
+body[data-skin="vale_mantiqueira"] .kiosk-main {
+  min-height: calc(100vh - 112px);
+}
+
+body[data-skin="vale_mantiqueira"] .hero h1 {
+  color: var(--brand-primary);
+}
+
+body[data-skin="vale_mantiqueira"] .hero h1::after {
+  content: "";
+  display: block;
+  width: 86px;
+  height: 5px;
+  border-radius: 999px;
+  margin: 18px auto 0;
+  background: linear-gradient(90deg, var(--brand-secondary) 0 65%, var(--brand-accent) 65%);
+}
+
+body[data-skin="vale_mantiqueira"] .choice-card,
+body[data-skin="vale_mantiqueira"] .panel-card {
+  border-color: var(--brand-border);
+  box-shadow: 0 18px 55px rgba(0,75,42,.08);
+}
+
+body[data-skin="vale_mantiqueira"] .choice-card {
+  position: relative;
+  overflow: hidden;
+}
+
+body[data-skin="vale_mantiqueira"] .choice-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 7px;
+  background: linear-gradient(90deg, var(--brand-primary), var(--brand-secondary) 72%, var(--brand-accent));
+}
+
+body[data-skin="vale_mantiqueira"] .choice-card:hover,
+body[data-skin="vale_mantiqueira"] .choice-card:focus {
+  border-color: #91bf74;
+  box-shadow: 0 22px 65px rgba(0,107,60,.15);
+  transform: translateY(-2px);
+}
+
+body[data-skin="vale_mantiqueira"] .choice-card .big-icon,
+body[data-skin="vale_mantiqueira"] .scan-icon,
+body[data-skin="vale_mantiqueira"] .payment-option i {
+  color: var(--brand-primary);
+}
+
+body[data-skin="vale_mantiqueira"] .step-badge {
+  background: #e9f4e4;
+  color: var(--brand-primary);
+}
+
+body[data-skin="vale_mantiqueira"] .summary-box,
+body[data-skin="vale_mantiqueira"] .guest-header,
+body[data-skin="vale_mantiqueira"] .wristband-item,
+body[data-skin="vale_mantiqueira"] .hardware-card {
+  background: var(--brand-soft-2);
+  border-color: var(--brand-border);
+}
+
+body[data-skin="vale_mantiqueira"] .guest-section,
+body[data-skin="vale_mantiqueira"] .folio-row,
+body[data-skin="vale_mantiqueira"] .document-row {
+  border-color: var(--brand-border);
+}
+
+body[data-skin="vale_mantiqueira"] .scan-box {
+  border-color: #a9c99a;
+  background: #fbfdf9;
+}
+
+body[data-skin="vale_mantiqueira"] .total-bar {
+  background: linear-gradient(120deg, #005c34, #007844);
+}
+
+body[data-skin="vale_mantiqueira"] .payment-option.selected {
+  border-color: var(--brand-primary);
+  background: #eef8e9;
+  box-shadow: 0 0 0 3px rgba(var(--brand-primary-rgb), .08);
+}
+
+body[data-skin="vale_mantiqueira"] .success-icon {
+  background: #e7f6df;
+  color: var(--brand-primary);
+}
+
+body[data-skin="vale_mantiqueira"] .a11y-btn {
+  color: var(--brand-primary);
+  border: 1px solid #dfeadb;
+}
+
+/* Skin selector preview inside the authenticated settings dashboard. */
+.theme-admin-section {
+  border-width: 2px;
+}
+
+.skin-preview {
+  min-height: 138px;
+  height: 100%;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 14px;
+  background: #fff;
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 1fr;
+  align-items: center;
+  gap: 14px;
+  overflow: hidden;
+}
+
+.skin-preview-head {
+  min-height: 92px;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.skin-preview-logo {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.skin-preview-neutral {
+  width: 70px;
+  height: 70px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  color: #fff;
+  font-size: 2rem;
+  background: linear-gradient(135deg, #0d6efd, #4c8dff);
+}
+
+.skin-preview-copy {
+  min-width: 0;
+}
+
+.skin-preview-copy strong,
+.skin-preview-copy small {
+  display: block;
+}
+
+.skin-preview-copy small {
+  color: #667085;
+  margin-top: 4px;
+  line-height: 1.25;
+}
+
+.skin-swatches {
+  display: flex;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.skin-swatches span {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--swatch);
+  border: 2px solid rgba(0,0,0,.06);
+}
+
+/* High-contrast accessibility always wins over a decorative skin. */
+body.high-contrast .brand-logo-frame {
+  background: #fff;
+  padding: 6px;
+  border-radius: 8px;
+}
+
+body.high-contrast .kiosk-header::after {
+  background: #fff;
+}
+
+body.high-contrast .hero h1 {
+  color: #fff;
+}
+
+body.high-contrast .hero h1::after {
+  background: #fff;
+}
+
+body.high-contrast .skin-preview {
+  background: #000;
+  color: #fff;
+  border-color: #fff;
+}
+
+@media (max-width: 760px) {
+  body[data-skin="vale_mantiqueira"] .kiosk-header {
+    min-height: 92px;
+    padding-inline: 14px;
+  }
+
+  .brand-logo-frame {
+    width: min(285px, calc(100vw - 100px));
+  }
+
+  .brand-logo {
+    max-height: 68px;
+  }
+
+  .skin-preview {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (orientation: portrait) and (min-width: 800px) {
+  .brand-logo-frame {
+    width: clamp(300px, 40vw, 390px);
+  }
+}

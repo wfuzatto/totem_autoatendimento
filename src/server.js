@@ -111,6 +111,7 @@ app.get('/api/config', (_req, res) => {
   const s = getSettings();
   res.json({
     hotel_name: s.hotel_name,
+    theme_skin: s.theme_skin || 'vale_mantiqueira',
     allow_item_contest: s.allow_item_contest === '1',
     require_govbr: s.require_govbr === '1',
     require_face_match: s.require_face_match === '1',

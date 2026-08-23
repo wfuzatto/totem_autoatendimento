@@ -111,7 +111,8 @@ function init() {
 
   const defaults = {
     admin_password_hash: hashPassword(process.env.ADMIN_PASSWORD || '251933'),
-    hotel_name: 'Hotel Demonstração',
+    hotel_name: 'Hotel Fazenda Vale da Mantiqueira',
+    theme_skin: 'vale_mantiqueira',
     allow_item_contest: '1',
     require_govbr: '1',
     require_face_match: '1',
@@ -131,6 +132,14 @@ function init() {
   const insertSetting = db.prepare('INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)');
   const tx = db.transaction(() => Object.entries(defaults).forEach(([k, v]) => insertSetting.run(k, v)));
   tx();
+
+  // Migration for installations created before the hotel skin became the default.
+  db.prepare(`
+    UPDATE settings
+       SET value = 'Hotel Fazenda Vale da Mantiqueira', updated_at = CURRENT_TIMESTAMP
+     WHERE key = 'hotel_name' AND value = 'Hotel Demonstração'
+  `).run();
+
   seedDemo();
 }
 
@@ -184,7 +193,7 @@ function getSettings({ includeSecrets = false } = {}) {
 
 function setSettings(values) {
   const allowed = new Set([
-    'hotel_name','allow_item_contest','require_govbr','require_face_match','require_wristband_return',
+    'hotel_name','theme_skin','allow_item_contest','require_govbr','require_face_match','require_wristband_return',
     'enable_accessibility_toolbar','api_provider','totvs_base_url','totvs_token','payment_provider','sitef_server',
     'nfc_mode','printer_mode','webcam_mode','inactivity_seconds'
   ]);
