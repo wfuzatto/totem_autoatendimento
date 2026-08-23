@@ -188,7 +188,7 @@ function createManualReservation(payload) {
     INSERT INTO reservations(
       reservation_number,room_number,responsible_name,responsible_cpf,checkin_date,checkout_date,
       status,adults,children,balance_cents,payment_pending
-    ) VALUES(?,?,?,?,?,?,'reserved',?,?,?,?,?)
+    ) VALUES(?,?,?,?,?,?,'reserved',?,?,?,?)
   `);
   const insertGuest = db.prepare('INSERT INTO guests(reservation_id,name,document,adult,wristband_code,face_verified) VALUES(?,?,?,?,NULL,0)');
   const insertDocument = db.prepare(`
