@@ -33,8 +33,8 @@
       const data = await api('/api/admin/checkout-settings');
       const previewUrl = data.ad_url ? mediaUrl(data.ad_url) : null;
       preview.innerHTML = previewUrl
-        ? `<img src="${previewUrl}" alt="Propaganda atual do checkout"><div class="checkout-ad-admin-overlay"><i class="bi bi-cloud-arrow-up-fill"></i><span>Clique para trocar o PNG</span></div>`
-        : '<div class="checkout-ad-empty"><i class="bi bi-image"></i><strong>Enviar propaganda PNG</strong><small>Será exibida por 30 segundos após o checkout.</small></div>';
+        ? `<img src="${previewUrl}" alt="Propaganda atual das telas finais"><div class="checkout-ad-admin-overlay"><i class="bi bi-cloud-arrow-up-fill"></i><span>Clique para trocar o PNG</span></div>`
+        : '<div class="checkout-ad-empty"><i class="bi bi-image"></i><strong>Enviar propaganda PNG</strong><small>Será exibida nas telas finais de check-in e check-out.</small></div>';
       const remove = document.getElementById('removeCheckoutAd');
       if (remove) remove.hidden = !data.ad_url;
     } catch (error) {
@@ -51,7 +51,7 @@
     const form = new FormData();
     form.append('ad', file);
     await api('/api/admin/branding/checkout-ad', { method: 'POST', body: form });
-    if (status) { status.className = 'form-text text-success mt-2'; status.textContent = 'Propaganda atualizada. Ela será exibida por 30 segundos após o checkout.'; }
+    if (status) { status.className = 'form-text text-success mt-2'; status.textContent = 'Propaganda atualizada. Ela será exibida abaixo do botão Finalizar no check-in e no check-out concluídos.'; }
     await renderPreview();
   }
 
@@ -72,15 +72,15 @@
       section.className = 'admin-section';
       section.dataset.checkoutAdSection = '1';
       section.innerHTML = `
-        <h3><i class="bi bi-badge-ad me-2"></i>Mensagem após o checkout</h3>
+        <h3><i class="bi bi-badge-ad me-2"></i>Mensagem nas telas finais</h3>
         <div class="row g-3 align-items-center">
           <div class="col-lg-7">
-            <label class="form-label">Propaganda pós-checkout</label>
-            <p class="text-secondary mb-3">Após a confirmação e emissão da autorização de saída, esta arte PNG ocupará a tela por <strong>30 segundos</strong> e depois o totem voltará automaticamente ao início.</p>
+            <label class="form-label">Propaganda de conclusão</label>
+            <p class="text-secondary mb-3">Esta arte PNG ficará visível <strong>logo abaixo do botão Finalizar</strong> nas telas de check-in concluído e check-out concluído. Não há mais contagem regressiva nem exibição temporária de 30 segundos.</p>
             <button type="button" class="btn btn-primary btn-lg" id="selectCheckoutAd"><i class="bi bi-upload me-2"></i>Enviar/trocar PNG</button>
             <button type="button" class="btn btn-outline-danger btn-lg ms-2" id="removeCheckoutAd" hidden><i class="bi bi-trash me-2"></i>Remover</button>
             <input type="file" id="checkoutAdInput" accept="image/png" hidden>
-            <div id="checkoutAdStatus" class="form-text mt-2">Use preferencialmente uma arte vertical na proporção da tela do totem.</div>
+            <div id="checkoutAdStatus" class="form-text mt-2">Use uma arte legível no tamanho da tela do totem; ela permanecerá visível até o hóspede tocar em Finalizar.</div>
           </div>
           <div class="col-lg-5">
             <button type="button" class="checkout-ad-admin-preview" id="checkoutAdPreview" aria-label="Prévia da propaganda. Clique para enviar ou trocar."></button>
