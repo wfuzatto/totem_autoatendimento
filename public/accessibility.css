@@ -1,0 +1,32 @@
+/* A magnificação substitui o antigo toggle fixo de fonte. */
+body.large-text { --text-scale: 1 !important; }
+
+.magnification-popover {
+  position: fixed;
+  left: 16px;
+  bottom: 86px;
+  width: min(360px, calc(100vw - 32px));
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255,255,255,.98);
+  border: 1px solid var(--brand-border, #dce9d8);
+  box-shadow: 0 14px 38px rgba(16,24,40,.2);
+  z-index: 160;
+  user-select: none;
+}
+
+.magnification-popover[hidden] { display: none !important; }
+.magnification-title { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+.magnification-title strong { font-size:1rem; }
+.magnification-value { font-weight:800; color:var(--kiosk-primary,#006b3c); min-width:54px; text-align:right; }
+.magnification-slider { width:100%; accent-color:var(--kiosk-primary,#006b3c); min-height:34px; }
+.magnification-scale { display:flex; justify-content:space-between; color:var(--kiosk-muted,#667085); font-size:.78rem; margin-top:-4px; }
+.magnification-reset { width:100%; margin-top:10px; min-height:46px; border-radius:12px; }
+
+body.high-contrast .magnification-popover {
+  background:#000;
+  color:#fff;
+  border-color:#fff;
+}
+body.high-contrast .magnification-value { color:#fff; }
+body.high-contrast .magnification-scale { color:#fff; }

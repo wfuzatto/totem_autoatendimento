@@ -54,6 +54,12 @@ app.whenReady().then(() => {
   });
 });
 
+ipcMain.on('kiosk-zoom', (_event, factor) => {
+  const numeric = Number(factor);
+  const safeFactor = Number.isFinite(numeric) ? Math.min(1.6, Math.max(0.8, numeric)) : 1;
+  if (win && !win.isDestroyed()) win.webContents.setZoomFactor(safeFactor);
+});
+
 ipcMain.on('kiosk-exit', () => {
   exitAllowed = true;
   if (win && !win.isDestroyed()) {

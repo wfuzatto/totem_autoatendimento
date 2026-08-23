@@ -22,8 +22,10 @@
     .card{border:1px solid var(--brand-border,#dce9d8);border-radius:22px;box-shadow:0 16px 45px rgba(0,75,42,.08)}
     .doc{border:1px solid var(--brand-border,#dce9d8);border-radius:16px;padding:16px;margin-bottom:12px}
     .btn,.form-control{min-height:52px;border-radius:12px}
-    .status{font-weight:700}.ok{color:#157347}.pending{color:#9a6700}
+    .status{font-weight:700}.ok{color:#157347}.pending{color:#9a6700}.invalid{color:#b42318}
     .privacy-note{font-size:.9rem;color:#68776e;max-width:620px;margin:12px auto 0}
+    .validation-help{font-size:.9rem;color:#56645b;background:#f5f9f2;border-radius:10px;padding:10px 12px}
+    .validation-help.valid{color:#157347;background:#eef9f1}
     body[data-skin="neutral"]{background:#f4f7fb}
   </style>
 </head>
@@ -42,7 +44,7 @@
     <div class="text-center mb-4">
       <h1 class="h2 fw-bold page-title">Envio de documentos</h1>
       <p class="text-secondary mb-1">Envie apenas os documentos solicitados para concluir o check-in.</p>
-      <p class="privacy-note"><i class="bi bi-shield-lock me-1"></i>Esta página está vinculada à sua reserva e ao QR Code exibido no totem.</p>
+      <p class="privacy-note"><i class="bi bi-shield-lock me-1"></i>Documentos de identidade passam por validação automática antes de serem aceitos.</p>
     </div>
 
     <section class="card p-3 p-md-4" id="content">

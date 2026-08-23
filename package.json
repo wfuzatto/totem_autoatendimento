@@ -1,13 +1,13 @@
 {
   "name": "totem-autoatendimento",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Totem hoteleiro de check-in e check-out com integrações desacopladas",
   "type": "commonjs",
   "main": "electron/main.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
+    "start": "node src/server-runtime.js",
+    "dev": "node --watch src/server-runtime.js",
     "kiosk": "electron .",
     "test": "node --test test/*.test.js"
   },

@@ -9,6 +9,7 @@
   <link href="/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
   <link href="/styles.css" rel="stylesheet">
   <link href="/theme.css" rel="stylesheet">
+  <link href="/accessibility.css" rel="stylesheet">
 </head>
 <body data-skin="vale_mantiqueira">
   <header class="kiosk-header">
@@ -29,8 +30,18 @@
 
   <main class="kiosk-main" id="app" aria-live="polite"></main>
 
+  <div id="magnificationPanel" class="magnification-popover" role="dialog" aria-label="Ajustar magnificação da tela" hidden>
+    <div class="magnification-title">
+      <strong><i class="bi bi-zoom-in me-2"></i>Magnificação</strong>
+      <span id="magnificationValue" class="magnification-value">100%</span>
+    </div>
+    <input id="magnificationRange" class="form-range magnification-slider" type="range" min="80" max="160" step="10" value="100" aria-label="Magnificação da tela de 80 a 160 por cento">
+    <div class="magnification-scale" aria-hidden="true"><span>80%</span><span>100%</span><span>160%</span></div>
+    <button id="magnificationReset" class="btn btn-outline-secondary magnification-reset" type="button"><i class="bi bi-arrow-counterclockwise me-2"></i>Voltar para 100%</button>
+  </div>
+
   <div id="accessibilityToolbar" class="accessibility-toolbar" aria-label="Opções de acessibilidade">
-    <button class="a11y-btn" id="fontBtn" aria-label="Aumentar texto"><i class="bi bi-fonts"></i></button>
+    <button class="a11y-btn" id="fontBtn" aria-label="Ajustar magnificação" title="Magnificação"><i class="bi bi-fonts"></i></button>
     <button class="a11y-btn" id="contrastBtn" aria-label="Alto contraste"><i class="bi bi-circle-half"></i></button>
     <button class="a11y-btn" id="speakBtn" aria-label="Ler tela em voz alta"><i class="bi bi-volume-up-fill"></i></button>
   </div>
@@ -89,6 +100,8 @@
   <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
   <script src="/theme.js"></script>
   <script src="/camera-manager.js"></script>
+  <script src="/document-monitor.js"></script>
   <script src="/app.js"></script>
+  <script src="/accessibility.js"></script>
 </body>
 </html>

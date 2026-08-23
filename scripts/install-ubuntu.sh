@@ -16,12 +16,13 @@ if (( NODE_MAJOR < 20 )); then
   exit 1
 fi
 
-echo "Instalando dependências do sistema para Electron, PC/SC e ACR122U..."
+echo "Instalando dependências do sistema para Electron, OCR, PC/SC e ACR122U..."
 sudo apt-get update
 sudo apt-get install -y \
   pcscd libpcsclite-dev libnss3 libatk-bridge2.0-0 libgtk-3-0 libgbm1 \
   libasound2 libxss1 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
-  libxrandr2 libatspi2.0-0 ca-certificates build-essential
+  libxrandr2 libatspi2.0-0 ca-certificates build-essential \
+  tesseract-ocr tesseract-ocr-por tesseract-ocr-eng poppler-utils
 sudo systemctl enable --now pcscd
 
 cd "$ROOT"
@@ -30,7 +31,7 @@ mkdir -p data/uploads
 npm install
 
 mkdir -p "$HOME/.config/systemd/user"
-cat > "$HOME/.config/systemd/user/totem-backend.service" <<EOF
+cat > "$HOME/.config/systemd/user/totem-backend.service" <<EOF_SERVICE
 [Unit]
 Description=Totem Autoatendimento - Backend
 After=network-online.target
@@ -48,9 +49,9 @@ StartLimitIntervalSec=0
 
 [Install]
 WantedBy=default.target
-EOF
+EOF_SERVICE
 
-cat > "$HOME/.config/systemd/user/totem-kiosk.service" <<EOF
+cat > "$HOME/.config/systemd/user/totem-kiosk.service" <<EOF_SERVICE
 [Unit]
 Description=Totem Autoatendimento - Kiosk Electron
 After=graphical-session.target totem-backend.service
@@ -67,7 +68,7 @@ StartLimitIntervalSec=0
 
 [Install]
 WantedBy=graphical-session.target
-EOF
+EOF_SERVICE
 
 systemctl --user daemon-reload
 systemctl --user enable --now totem-backend.service
@@ -75,6 +76,7 @@ systemctl --user enable totem-kiosk.service
 
 echo
 echo "Backend instalado e iniciado."
+echo "Validador de documentos: Tesseract OCR (por+eng) + Poppler para PDF."
 echo "Para iniciar o kiosk agora dentro da sessão gráfica: systemctl --user start totem-kiosk.service"
 echo "Para testes no navegador: http://127.0.0.1:3080"
 echo "Senha inicial da configuração: 251933"
