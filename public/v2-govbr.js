@@ -26,6 +26,51 @@
     return title.includes('validação gov.br');
   }
 
+  function mobileMethod(config) {
+    if (!config.govbr_qr_url) {
+      return `<section class="govbr-method-card govbr-method-mobile">
+        <div class="govbr-method-heading"><span class="govbr-method-number">1</span><div><strong>Usar meu celular</strong><small>Leia o QR Code com a câmera do celular</small></div></div>
+        <div class="alert alert-warning govbr-qr-missing mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>QR Code gov.br ainda não configurado. Um administrador deve enviar a imagem em Configurações.</div>
+      </section>`;
+    }
+    return `<section class="govbr-method-card govbr-method-mobile">
+      <div class="govbr-method-heading"><span class="govbr-method-number">1</span><div><strong>Usar meu celular</strong><small>Leia o QR Code com a câmera do celular</small></div></div>
+      <div class="govbr-hotel-qr" id="govbrHotelQr">
+        <div class="govbr-qr-frame"><img src="${esc(config.govbr_qr_url)}" alt="QR Code para check-in e autenticação gov.br do hotel"></div>
+        <div class="govbr-qr-help">Abra a câmera do celular, leia o QR Code e conclua a autenticação no fluxo gov.br do hotel.</div>
+      </div>
+    </section>`;
+  }
+
+  function kioskMethod(config) {
+    if (!config.govbr_hotel_url) {
+      return `<section class="govbr-method-card govbr-method-kiosk">
+        <div class="govbr-method-heading"><span class="govbr-method-number">2</span><div><strong>Usar este totem</strong><small>Faça a autenticação sem usar outro aparelho</small></div></div>
+        <div class="alert alert-warning mb-0"><i class="bi bi-link-45deg me-2"></i>Link gov.br do hotel ainda não configurado. Informe o endereço HTTPS nas Configurações.</div>
+      </section>`;
+    }
+
+    return `<section class="govbr-method-card govbr-method-kiosk">
+      <div class="govbr-method-heading"><span class="govbr-method-number">2</span><div><strong>Usar este totem</strong><small>Faça a autenticação diretamente abaixo</small></div></div>
+      <div class="govbr-iframe-shell">
+        <div class="govbr-iframe-toolbar">
+          <div><i class="bi bi-shield-lock-fill me-2"></i>Ambiente gov.br do hotel</div>
+          <a class="btn btn-outline-primary btn-sm" href="${esc(config.govbr_hotel_url)}" target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right me-1"></i>Abrir em nova janela</a>
+        </div>
+        <iframe
+          id="govbrHotelFrame"
+          class="govbr-hotel-iframe"
+          src="${esc(config.govbr_hotel_url)}"
+          title="Autenticação gov.br do hotel"
+          loading="eager"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allow="clipboard-read; clipboard-write">
+        </iframe>
+      </div>
+      <div class="govbr-frame-help"><i class="bi bi-info-circle me-1"></i>Se o portal não aparecer dentro do quadro, use <strong>Abrir em nova janela</strong>. Alguns serviços gov.br impedem abertura em iframe por política de segurança.</div>
+    </section>`;
+  }
+
   async function decorateGovbrScreen() {
     if (!isGovbrScreen()) return;
     let config;
@@ -33,36 +78,37 @@
     if (!isGovbrScreen()) return;
 
     const scanBox = document.querySelector('#app .scan-box');
-    if (!scanBox) return;
-    scanBox.querySelector('#govbrHotelQr')?.remove();
-    scanBox.querySelector('#govbrQrMissing')?.remove();
+    if (!scanBox || scanBox.dataset.govbrV2Decorated === '1') return;
 
-    const paragraph = scanBox.querySelector('p.text-secondary');
     const button = document.getElementById('govBtn');
     const verified = Boolean(button?.textContent?.toLowerCase().includes('concluída'));
+    const buttonHolder = document.createElement('div');
+    if (button) buttonHolder.appendChild(button);
 
-    if (config.govbr_qr_url) {
-      const block = document.createElement('div');
-      block.id = 'govbrHotelQr';
-      block.className = 'govbr-hotel-qr';
-      block.innerHTML = `
-        <div class="govbr-qr-label"><i class="bi bi-qr-code me-2"></i>Escaneie com seu celular</div>
-        <div class="govbr-qr-frame"><img src="${esc(config.govbr_qr_url)}" alt="QR Code para check-in e autenticação gov.br do hotel"></div>
-        <div class="govbr-qr-help">Abra a câmera do celular, leia o QR Code e conclua a autenticação no fluxo gov.br do hotel.</div>`;
-      if (paragraph) paragraph.before(block); else scanBox.appendChild(block);
-      if (paragraph) paragraph.textContent = verified
-        ? 'Autenticação registrada. Você pode avançar.'
-        : 'Após concluir no celular, aguarde a confirmação no totem. No MVP, o botão abaixo simula o retorno positivo.';
-    } else {
-      const warning = document.createElement('div');
-      warning.id = 'govbrQrMissing';
-      warning.className = 'alert alert-warning govbr-qr-missing';
-      warning.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i>QR Code gov.br ainda não configurado. Um administrador deve enviar a imagem em Configurações.';
-      if (paragraph) paragraph.before(warning); else scanBox.appendChild(warning);
-    }
+    scanBox.dataset.govbrV2Decorated = '1';
+    scanBox.classList.add('govbr-auth-box');
+    scanBox.innerHTML = `
+      <div class="govbr-auth-intro">
+        <i class="bi bi-shield-check scan-icon"></i>
+        <h2 class="h4 fw-bold mt-3">Escolha como deseja autenticar</h2>
+        <p class="text-secondary mb-0">Você pode continuar pelo seu celular ou realizar a autenticação diretamente neste totem.</p>
+      </div>
+      <div class="govbr-methods">
+        ${mobileMethod(config)}
+        ${kioskMethod(config)}
+      </div>
+      <div id="govbrVerificationAction" class="govbr-verification-action"></div>`;
 
-    if (button && !verified) {
-      button.innerHTML = '<i class="bi bi-check2-circle me-2"></i>Simular confirmação gov.br (MVP)';
+    const action = document.getElementById('govbrVerificationAction');
+    if (button && action) {
+      if (!verified) button.innerHTML = '<i class="bi bi-check2-circle me-2"></i>Simular confirmação gov.br (MVP)';
+      action.appendChild(button);
+      const status = document.createElement('div');
+      status.className = verified ? 'alert alert-success mt-3 mb-0' : 'form-text mt-2';
+      status.innerHTML = verified
+        ? '<i class="bi bi-check-circle-fill me-2"></i>Autenticação gov.br registrada. Você pode avançar.'
+        : 'Enquanto a integração oficial de retorno não estiver conectada, o botão acima simula a confirmação para permitir os testes da V2.';
+      action.appendChild(status);
     }
   }
 
@@ -73,10 +119,9 @@
   async function adminJson(url, options = {}) {
     const token = adminToken();
     if (!token) throw new Error('Sessão administrativa expirada. Feche e abra as configurações novamente.');
-    const response = await fetch(url, {
-      ...options,
-      headers: { ...(options.headers || {}), Authorization: `Bearer ${token}` }
-    });
+    const headers = { ...(options.headers || {}), Authorization: `Bearer ${token}` };
+    if (options.body && !(options.body instanceof FormData) && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    const response = await fetch(url, { ...options, headers });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.error || 'Não foi possível concluir a operação.');
     return data;
@@ -92,6 +137,8 @@
         : '<div class="govbr-admin-empty"><i class="bi bi-qr-code"></i><strong>Enviar QR Code gov.br</strong><small>PNG, JPG ou WEBP</small></div>';
       const remove = document.getElementById('removeGovbrQr');
       if (remove) remove.hidden = !data.govbr_qr_url;
+      const urlInput = document.getElementById('govbrHotelUrl');
+      if (urlInput && document.activeElement !== urlInput) urlInput.value = data.govbr_hotel_url || '';
     } catch (error) {
       preview.innerHTML = `<div class="text-danger p-3">${esc(error.message)}</div>`;
     }
@@ -110,7 +157,6 @@
     await loadConfig(true);
     if (status) { status.className = 'form-text text-success mt-2'; status.textContent = 'QR Code gov.br atualizado com sucesso.'; }
     await renderAdminPreview();
-    decorateGovbrScreen();
   }
 
   async function removeGovbrQr() {
@@ -120,7 +166,33 @@
     const status = document.getElementById('govbrQrAdminStatus');
     if (status) { status.className = 'form-text text-success mt-2'; status.textContent = 'QR Code gov.br removido.'; }
     await renderAdminPreview();
-    decorateGovbrScreen();
+  }
+
+  async function saveGovbrUrl() {
+    const input = document.getElementById('govbrHotelUrl');
+    const status = document.getElementById('govbrUrlAdminStatus');
+    if (!input) return;
+    const value = input.value.trim();
+    if (value) {
+      try {
+        const parsed = new URL(value);
+        if (parsed.protocol !== 'https:') throw new Error();
+      } catch (_) {
+        throw new Error('Informe um endereço HTTPS válido, por exemplo https://hotel.exemplo.gov.br/checkin.');
+      }
+    }
+    if (status) { status.className = 'form-text text-primary mt-2'; status.textContent = 'Salvando link...'; }
+    const data = await adminJson('/api/admin/v2/govbr-settings', {
+      method: 'PUT',
+      body: JSON.stringify({ govbr_hotel_url: value })
+    });
+    govbrConfig = null;
+    await loadConfig(true);
+    if (status) {
+      status.className = 'form-text text-success mt-2';
+      status.textContent = data.govbr_hotel_url ? 'Link gov.br salvo. O iframe usará este endereço.' : 'Link removido. O iframe ficará desativado.';
+    }
+    await renderAdminPreview();
   }
 
   function injectAdmin() {
@@ -133,17 +205,30 @@
       section.className = 'admin-section';
       section.dataset.v2GovbrAdmin = '1';
       section.innerHTML = `
-        <h3><i class="bi bi-shield-check me-2"></i>QR Code gov.br do hotel</h3>
-        <div class="row g-3 align-items-center">
+        <h3><i class="bi bi-shield-check me-2"></i>Autenticação gov.br do hotel</h3>
+        <div class="row g-4 align-items-start">
           <div class="col-lg-7">
-            <label class="form-label">QR Code do check-in gov.br</label>
-            <p class="text-secondary mb-3">Envie a imagem do QR Code que direciona o hóspede ao fluxo gov.br do hotel. Ela será mostrada na Etapa 4 do check-in.</p>
-            <button type="button" class="btn btn-primary btn-lg" id="selectGovbrQr"><i class="bi bi-upload me-2"></i>Enviar/trocar QR Code</button>
-            <button type="button" class="btn btn-outline-danger btn-lg ms-2" id="removeGovbrQr" hidden><i class="bi bi-trash me-2"></i>Remover</button>
-            <input type="file" id="govbrQrInput" accept="image/png,image/jpeg,image/webp" hidden>
-            <div id="govbrQrAdminStatus" class="form-text mt-2">Preferencialmente envie o QR Code original em alta resolução, sem recortes ou alterações.</div>
+            <div class="govbr-admin-group">
+              <label class="form-label fw-bold" for="govbrHotelUrl">Link gov.br do hotel</label>
+              <input id="govbrHotelUrl" type="url" inputmode="url" class="form-control touch-input" placeholder="https://..." autocomplete="off">
+              <div class="form-text">Este endereço HTTPS será aberto dentro do iframe na Etapa 4. Use o link exato do fluxo de check-in/autenticação do hotel.</div>
+              <button type="button" class="btn btn-primary mt-3" id="saveGovbrUrl"><i class="bi bi-link-45deg me-2"></i>Salvar link gov.br</button>
+              <div id="govbrUrlAdminStatus" class="form-text mt-2"></div>
+            </div>
+
+            <hr class="my-4">
+
+            <div class="govbr-admin-group">
+              <label class="form-label fw-bold">QR Code para usar pelo celular</label>
+              <p class="text-secondary mb-3">Envie a imagem do QR Code que direciona ao mesmo fluxo gov.br do hotel. Ela será mostrada como a opção “Usar meu celular”.</p>
+              <button type="button" class="btn btn-primary btn-lg" id="selectGovbrQr"><i class="bi bi-upload me-2"></i>Enviar/trocar QR Code</button>
+              <button type="button" class="btn btn-outline-danger btn-lg ms-2" id="removeGovbrQr" hidden><i class="bi bi-trash me-2"></i>Remover</button>
+              <input type="file" id="govbrQrInput" accept="image/png,image/jpeg,image/webp" hidden>
+              <div id="govbrQrAdminStatus" class="form-text mt-2">Preferencialmente envie o QR Code original em alta resolução, sem recortes ou alterações.</div>
+            </div>
           </div>
           <div class="col-lg-5">
+            <div class="form-label fw-bold">Prévia do QR Code</div>
             <button type="button" class="govbr-admin-preview" id="govbrQrAdminPreview" aria-label="Prévia do QR Code gov.br. Clique para enviar ou trocar."></button>
           </div>
         </div>`;
@@ -152,6 +237,11 @@
       const input = document.getElementById('govbrQrInput');
       document.getElementById('selectGovbrQr').onclick = () => input.click();
       document.getElementById('govbrQrAdminPreview').onclick = () => input.click();
+      document.getElementById('saveGovbrUrl').onclick = () => saveGovbrUrl().catch(error => {
+        const status = document.getElementById('govbrUrlAdminStatus');
+        status.className = 'form-text text-danger mt-2';
+        status.textContent = error.message;
+      });
       document.getElementById('removeGovbrQr').onclick = () => removeGovbrQr().catch(error => {
         const status = document.getElementById('govbrQrAdminStatus');
         status.className = 'form-text text-danger mt-2';
