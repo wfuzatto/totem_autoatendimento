@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__ . '/app/core.php';
+require __DIR__ . '/app/document_validator.php';
 
 $action = (string)($_GET['action'] ?? $_POST['action'] ?? 'health');
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
@@ -83,7 +84,13 @@ try {
             $entry=valid_upload_token((string)($_GET['token']??''));if(!$entry)json_response(['error'=>'QR Code expirado.'],410);$b=reservation_bundle((int)$entry['reservation_id']);json_response($b ?: ['error'=>'Reserva não encontrada.']);
 
         case 'document_upload':
-            if($method!=='POST')json_response(['error'=>'Método não permitido.'],405);$token=(string)($_POST['token']??'');$docId=(int)($_POST['document_id']??0);if(empty($_FILES['file']))json_response(['error'=>'Selecione um arquivo.'],400);json_response(document_upload($token,$docId,$_FILES['file']));
+            if($method!=='POST')json_response(['error'=>'Método não permitido.'],405);
+            $token=(string)($_POST['token']??'');$docId=(int)($_POST['document_id']??0);
+            if(empty($_FILES['file']))json_response(['error'=>'Selecione um arquivo.'],400);
+            $entry=valid_upload_token($token);if(!$entry)json_response(['error'=>'QR Code expirado. Gere um novo no totem.'],410);
+            $docStmt=db()->prepare('SELECT * FROM documents WHERE id=? AND reservation_id=?');$docStmt->execute([$docId,$entry['reservation_id']]);$doc=$docStmt->fetch();if(!$doc)json_response(['error'=>'Documento não encontrado.'],404);
+            if(($doc['type']??'')==='identity' && ($_FILES['file']['error']??UPLOAD_ERR_NO_FILE)===UPLOAD_ERR_OK){$mime=(new finfo(FILEINFO_MIME_TYPE))->file($_FILES['file']['tmp_name'])?:'';validate_identity_upload_file($_FILES['file']['tmp_name'],$mime);}
+            json_response(document_upload($token,$docId,$_FILES['file']));
 
         case 'document_remove':
             $id=(int)($data['reservation_id']??0);$doc=(int)($data['document_id']??0);json_response(remove_document($id,$doc));
