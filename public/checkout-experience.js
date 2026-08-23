@@ -8,6 +8,19 @@
 
   const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[c]));
 
+  function mediaUrl(url) {
+    if (!url) return null;
+    try {
+      const parsed = new URL(url, window.location.origin);
+      if (/\/api\/branding\/checkout-ad$/i.test(parsed.pathname)) parsed.pathname = '/api/v2/media/checkout-ad';
+      parsed.protocol = window.location.protocol;
+      parsed.host = window.location.host;
+      return parsed.href;
+    } catch (_) {
+      return '/api/v2/media/checkout-ad';
+    }
+  }
+
   window.fetch = async (...args) => {
     const response = await nativeFetch(...args);
     try {
@@ -41,14 +54,15 @@
   }
 
   function showAdvertisement(url, seconds = 30) {
-    if (!url) {
+    const safeUrl = mediaUrl(url);
+    if (!safeUrl) {
       setTimeout(() => location.reload(), 8000);
       return;
     }
     const overlay = document.createElement('div');
     overlay.className = 'checkout-ad-overlay';
     overlay.innerHTML = `
-      <img src="${esc(url)}" class="checkout-ad-image" alt="Mensagem do Hotel Fazenda Vale da Mantiqueira">
+      <img src="${esc(safeUrl)}" class="checkout-ad-image" alt="Mensagem do Hotel Fazenda Vale da Mantiqueira">
       <div class="checkout-ad-footer">
         <span>Obrigado pela estadia!</span>
         <span>Retornando ao início em <strong id="checkoutAdCountdown">${Number(seconds) || 30}</strong>s</span>
