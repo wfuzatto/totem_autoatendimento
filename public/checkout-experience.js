@@ -17,7 +17,7 @@
       parsed.host = window.location.host;
       return parsed.href;
     } catch (_) {
-      return '/api/v2/media/checkout-ad';
+      return `${window.location.origin}/api/v2/media/checkout-ad`;
     }
   }
 
@@ -53,34 +53,6 @@
     }
   }
 
-  function showAdvertisement(url, seconds = 30) {
-    const safeUrl = mediaUrl(url);
-    if (!safeUrl) {
-      setTimeout(() => location.reload(), 8000);
-      return;
-    }
-    const overlay = document.createElement('div');
-    overlay.className = 'checkout-ad-overlay';
-    overlay.innerHTML = `
-      <img src="${esc(safeUrl)}" class="checkout-ad-image" alt="Mensagem do Hotel Fazenda Vale da Mantiqueira">
-      <div class="checkout-ad-footer">
-        <span>Obrigado pela estadia!</span>
-        <span>Retornando ao início em <strong id="checkoutAdCountdown">${Number(seconds) || 30}</strong>s</span>
-      </div>`;
-    document.body.appendChild(overlay);
-
-    let remaining = Number(seconds) || 30;
-    const countdown = document.getElementById('checkoutAdCountdown');
-    const timer = setInterval(() => {
-      remaining -= 1;
-      if (countdown) countdown.textContent = String(Math.max(0, remaining));
-      if (remaining <= 0) {
-        clearInterval(timer);
-        location.reload();
-      }
-    }, 1000);
-  }
-
   async function renderEnhancedSuccess() {
     if (handled) return;
     handled = true;
@@ -89,6 +61,7 @@
     const print = authorization?.print;
     const printingOk = print?.ok !== false;
     const simulated = print?.mode === 'mock';
+    const adUrl = mediaUrl(config.ad_url || lastCheckout?.advertisement?.url);
     const printMessage = !printingOk
       ? '<span class="status-pill status-pending"><i class="bi bi-exclamation-triangle-fill"></i> Impressora indisponível — apresente o QR Code abaixo na portaria</span>'
       : simulated
@@ -112,12 +85,19 @@
           </div>` : `
           <div class="alert alert-warning mt-4"><i class="bi bi-exclamation-triangle-fill me-2"></i>${esc(lastCheckout?.error || 'Não foi possível gerar a guia de autorização de saída. Procure a recepção.')}</div>`}
 
-        <div class="checkout-next-message mt-4">
-          <i class="bi bi-image me-2"></i>A mensagem do hotel será exibida em instantes.
-        </div>
+        <button class="btn btn-primary btn-touch mt-4" id="checkoutFinishHome">
+          <i class="bi bi-house-door me-2"></i>Finalizar
+        </button>
+
+        ${adUrl ? `
+          <div class="v2-final-ad-slot" data-v2-final-ad="checkout">
+            <img src="${esc(adUrl)}" alt="Mensagem do Hotel Fazenda Vale da Mantiqueira após o check-out">
+          </div>` : ''}
       </section>`;
 
-    setTimeout(() => showAdvertisement(config.ad_url || lastCheckout?.advertisement?.url, config.ad_duration_seconds || 30), 6500);
+    document.getElementById('checkoutFinishHome')?.addEventListener('click', () => location.reload());
+    const adImage = app.querySelector('[data-v2-final-ad="checkout"] img');
+    adImage?.addEventListener('error', () => adImage.closest('.v2-final-ad-slot')?.classList.add('is-error'), { once: true });
   }
 
   const observer = new MutationObserver(() => {
