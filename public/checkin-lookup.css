@@ -96,6 +96,68 @@
 .lookup-message-error { color: #b42318; }
 .lookup-message-ok { color: #157347; }
 
+.qr-processing-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 19, 14, .58);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  opacity: 0;
+  transition: opacity .18s ease;
+  pointer-events: all;
+}
+
+.qr-processing-overlay.show { opacity: 1; }
+
+.qr-processing-card {
+  width: min(92vw, 460px);
+  padding: 38px 34px 34px;
+  border-radius: 28px;
+  background: rgba(255,255,255,.98);
+  color: #18241e;
+  text-align: center;
+  box-shadow: 0 28px 80px rgba(0,0,0,.28);
+  border: 1px solid rgba(255,255,255,.7);
+}
+
+.qr-processing-card h2 {
+  margin: 20px 0 6px;
+  font-size: clamp(1.7rem, 4vw, 2.25rem);
+  font-weight: 850;
+  color: var(--kiosk-primary, #006b3c);
+}
+
+.qr-processing-card p {
+  margin: 0;
+  font-size: clamp(1.05rem, 2.5vw, 1.3rem);
+  font-weight: 700;
+}
+
+.qr-processing-card small {
+  display: block;
+  margin-top: 8px;
+  color: #667085;
+  font-size: .98rem;
+}
+
+.qr-processing-spinner {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto;
+  border: 8px solid rgba(0,107,60,.16);
+  border-top-color: var(--kiosk-primary, #006b3c);
+  border-radius: 50%;
+  animation: qr-processing-spin .85s linear infinite;
+}
+
+@keyframes qr-processing-spin {
+  to { transform: rotate(360deg); }
+}
+
 body.high-contrast .lookup-option {
   background: #000;
   color: #fff;
@@ -105,6 +167,19 @@ body.high-contrast .lookup-message,
 body.high-contrast .lookup-option-title small { color: #fff; }
 body.high-contrast .lookup-message-error { color: #ffb4ab; }
 body.high-contrast .lookup-message-ok { color: #b6f2c5; }
+body.high-contrast .qr-processing-overlay { background: rgba(0,0,0,.82); }
+body.high-contrast .qr-processing-card {
+  background: #000;
+  color: #fff;
+  border: 2px solid #fff;
+}
+body.high-contrast .qr-processing-card h2,
+body.high-contrast .qr-processing-card small { color: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  .qr-processing-spinner { animation-duration: 1.6s; }
+  .qr-processing-overlay { transition: none; }
+}
 
 @media (max-width: 900px), (orientation: portrait) {
   .checkin-lookup-grid { grid-template-columns: 1fr; }
