@@ -35,6 +35,13 @@
     return '<div class="validation-help valid mt-2"><i class="bi bi-check-circle-fill me-1"></i>Documento reconhecido e validado automaticamente.</div>';
   }
 
+  function removeButton(doc) {
+    if (doc.status !== 'received') return '';
+    return `<button type="button" class="btn btn-outline-danger w-100 mt-2" data-remove-doc="${doc.id}">
+      <i class="bi bi-trash3 me-2"></i>Remover documento
+    </button>`;
+  }
+
   async function render() {
     if(!token) return error('QR Code inválido.');
     try {
@@ -55,6 +62,7 @@
             </div>
             ${guidance(doc)}
             ${doc.status !== 'received' ? `<form data-doc="${doc.id}" data-type="${doc.type}"><input class="form-control mb-2" type="file" name="file" accept="application/pdf,image/jpeg,image/png,image/webp" required><button class="btn btn-primary w-100" type="submit"><i class="bi bi-upload me-2"></i>${doc.status === 'invalid' || doc.status === 'validation_error' ? 'Enviar novamente' : 'Enviar documento'}</button></form>` : ''}
+            ${removeButton(doc)}
           </div>`;
         }).join('')}
         <button class="btn ${allDone ? 'btn-success':'btn-secondary'} w-100 mt-3" id="doneBtn" ${allDone ? '':'disabled'}><i class="bi bi-check2-all me-2"></i>Enviei tudo</button>
@@ -77,6 +85,24 @@
         } catch(err) {
           btn.disabled=false;
           btn.textContent='Tentar novamente';
+          document.getElementById('msg').innerHTML=`<div class="alert alert-danger">${esc(err.message)}</div>`;
+        }
+      }));
+
+      content.querySelectorAll('[data-remove-doc]').forEach(button => button.addEventListener('click', async () => {
+        const documentId = button.dataset.removeDoc;
+        const confirmed = window.confirm('Remover este documento? Ele voltará para Pendente e você poderá enviar o arquivo correto.');
+        if (!confirmed) return;
+
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Removendo...';
+        try {
+          const result = await req(`/api/public/upload/${encodeURIComponent(token)}/${documentId}`, { method:'DELETE' });
+          flash = { kind:'success', text: result.message || 'Documento removido. Envie novamente o arquivo correto.' };
+          await render();
+        } catch (err) {
+          button.disabled = false;
+          button.innerHTML = '<i class="bi bi-trash3 me-2"></i>Remover documento';
           document.getElementById('msg').innerHTML=`<div class="alert alert-danger">${esc(err.message)}</div>`;
         }
       }));
