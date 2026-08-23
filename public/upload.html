@@ -3,18 +3,56 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Envio de documentos</title>
+  <meta name="theme-color" content="#006b3c">
+  <title>Hotel Fazenda Vale da Mantiqueira · Envio de documentos</title>
   <link href="/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
   <link href="/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
+  <link href="/theme.css" rel="stylesheet">
   <style>
-    body{background:#f4f7fb;color:#172033}.wrap{max-width:760px;margin:auto;padding:28px 16px 60px}.card{border:0;border-radius:22px;box-shadow:0 16px 45px rgba(16,24,40,.08)}.doc{border:1px solid #e5eaf1;border-radius:16px;padding:16px;margin-bottom:12px}.btn,.form-control{min-height:52px;border-radius:12px}.status{font-weight:700}.ok{color:#157347}.pending{color:#9a6700}
+    body{background:linear-gradient(180deg,#fff 0,#f6faf3 45%,#eef5e9 100%);color:var(--kiosk-text,#153027);min-height:100vh}
+    .wrap{max-width:760px;margin:auto;padding:24px 16px 60px}
+    .upload-brand{display:flex;justify-content:center;align-items:center;margin:6px auto 24px;min-height:86px}
+    .upload-brand .brand-logo-frame{width:min(440px,82vw);max-width:none}
+    .upload-brand .brand-logo{max-height:110px}
+    .upload-generic{display:none;text-align:center}
+    .upload-generic i{display:grid;place-items:center;width:70px;height:70px;margin:0 auto 10px;border-radius:20px;background:linear-gradient(135deg,#0d6efd,#4c8dff);color:#fff;font-size:2rem}
+    body[data-skin="neutral"] .upload-brand .brand-logo-frame{display:none}
+    body[data-skin="neutral"] .upload-generic{display:block}
+    .page-title{color:var(--kiosk-primary,#006b3c)}
+    .card{border:1px solid var(--brand-border,#dce9d8);border-radius:22px;box-shadow:0 16px 45px rgba(0,75,42,.08)}
+    .doc{border:1px solid var(--brand-border,#dce9d8);border-radius:16px;padding:16px;margin-bottom:12px}
+    .btn,.form-control{min-height:52px;border-radius:12px}
+    .status{font-weight:700}.ok{color:#157347}.pending{color:#9a6700}
+    .privacy-note{font-size:.9rem;color:#68776e;max-width:620px;margin:12px auto 0}
+    body[data-skin="neutral"]{background:#f4f7fb}
   </style>
 </head>
-<body>
+<body data-skin="vale_mantiqueira">
   <main class="wrap">
-    <div class="text-center mb-4"><i class="bi bi-building-check fs-1 text-primary"></i><h1 class="h2 fw-bold mt-2">Envio de documentos</h1><p class="text-secondary">Envie apenas os documentos solicitados para concluir o check-in.</p></div>
-    <section class="card p-3 p-md-4" id="content"><div class="text-center py-5"><div class="spinner-border text-primary"></div><p class="mt-3">Carregando...</p></div></section>
+    <div class="upload-brand" aria-label="Hotel Fazenda Vale da Mantiqueira">
+      <div class="brand-logo-frame">
+        <img id="brandLogo" class="brand-logo" src="/assets/skins/vale-mantiqueira/logo.jpg" alt="Hotel Fazenda Vale da Mantiqueira">
+      </div>
+      <div class="upload-generic" aria-hidden="true">
+        <i class="bi bi-building-check"></i>
+        <strong>Autoatendimento</strong>
+      </div>
+    </div>
+
+    <div class="text-center mb-4">
+      <h1 class="h2 fw-bold page-title">Envio de documentos</h1>
+      <p class="text-secondary mb-1">Envie apenas os documentos solicitados para concluir o check-in.</p>
+      <p class="privacy-note"><i class="bi bi-shield-lock me-1"></i>Esta página está vinculada à sua reserva e ao QR Code exibido no totem.</p>
+    </div>
+
+    <section class="card p-3 p-md-4" id="content">
+      <div class="text-center py-5">
+        <div class="spinner-border" style="color:var(--kiosk-primary,#006b3c)"></div>
+        <p class="mt-3">Carregando...</p>
+      </div>
+    </section>
   </main>
+  <script src="/theme.js"></script>
   <script src="/upload.js"></script>
 </body>
 </html>
