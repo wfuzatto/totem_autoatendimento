@@ -60,6 +60,38 @@ ipcMain.on('kiosk-zoom', (_event, factor) => {
   if (win && !win.isDestroyed()) win.webContents.setZoomFactor(safeFactor);
 });
 
+function sendKeyPress(keyCode) {
+  if (!win || win.isDestroyed()) return;
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode });
+}
+
+ipcMain.on('kiosk-keyboard-input', (_event, payload = {}) => {
+  if (!win || win.isDestroyed()) return;
+  const action = String(payload.action || '');
+
+  if (action === 'char') {
+    const value = String(payload.value || '').slice(0, 4);
+    if (!value) return;
+    for (const char of Array.from(value)) {
+      win.webContents.sendInputEvent({ type: 'char', keyCode: char });
+    }
+    return;
+  }
+
+  if (action === 'space') {
+    win.webContents.sendInputEvent({ type: 'char', keyCode: ' ' });
+    return;
+  }
+
+  const allowed = {
+    backspace: 'Backspace',
+    enter: 'Enter',
+    tab: 'Tab'
+  };
+  if (allowed[action]) sendKeyPress(allowed[action]);
+});
+
 ipcMain.on('kiosk-exit', () => {
   exitAllowed = true;
   if (win && !win.isDestroyed()) {
