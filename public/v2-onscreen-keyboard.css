@@ -1,0 +1,180 @@
+.v2-osk {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 21000;
+  padding: 10px clamp(10px, 2vw, 24px) max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(16, 24, 40, .16);
+  background: rgba(238, 241, 244, .98);
+  box-shadow: 0 -18px 42px rgba(16, 24, 40, .22);
+  backdrop-filter: blur(12px);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+.v2-osk[hidden] { display: none !important; }
+
+.v2-osk-header {
+  max-width: 1280px;
+  margin: 0 auto 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.v2-osk-title {
+  color: #1f2937;
+  font-size: .98rem;
+  font-weight: 850;
+}
+
+.v2-osk-status {
+  margin-top: 1px;
+  color: #667085;
+  font-size: .78rem;
+}
+
+.v2-osk-close {
+  width: 42px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #cfd4dc;
+  border-radius: 7px;
+  background: #fff;
+  color: #344054;
+  font-size: 1rem;
+}
+
+.v2-osk-keys {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  gap: 5px;
+}
+
+.v2-osk-row {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+}
+
+.v2-osk-key {
+  min-width: clamp(50px, 7.1vw, 92px);
+  height: clamp(42px, 5.3vh, 56px);
+  flex: 0 1 92px;
+  display: grid;
+  place-items: center;
+  padding: 0 9px;
+  border: 1px solid #c9ced6;
+  border-radius: 6px;
+  background: #fff;
+  color: #1d2939;
+  box-shadow: 0 1px 1px rgba(16, 24, 40, .08), inset 0 1px 0 rgba(255,255,255,.8);
+  font: inherit;
+  font-size: clamp(.92rem, 1.5vw, 1.12rem);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.v2-osk-key:active,
+.v2-osk-key.is-active {
+  transform: translateY(1px);
+  border-color: #7db594;
+  background: #dff1e5;
+  color: #075f37;
+}
+
+.v2-osk-key-wide {
+  min-width: clamp(72px, 9vw, 118px);
+  flex-basis: 118px;
+}
+
+.v2-osk-key-space {
+  flex: 5 1 420px;
+  max-width: 520px;
+}
+
+.v2-osk-numeric {
+  max-width: 620px;
+}
+
+.v2-osk-numeric .v2-osk-key {
+  min-width: 108px;
+  height: 56px;
+  flex: 1 1 150px;
+  font-size: 1.2rem;
+}
+
+body.v2-keyboard-open {
+  --v2-keyboard-safe-space: min(42vh, 390px);
+}
+
+body.v2-keyboard-open .kiosk-main {
+  padding-bottom: calc(var(--v2-keyboard-safe-space) + 24px);
+}
+
+.v2-iframe-keyboard-btn {
+  white-space: nowrap;
+}
+
+.govbr-iframe-toolbar {
+  flex-wrap: wrap;
+}
+
+body.high-contrast .v2-osk {
+  border-color: #fff;
+  background: #000;
+  color: #fff;
+}
+
+body.high-contrast .v2-osk-title,
+body.high-contrast .v2-osk-status { color: #fff; }
+
+body.high-contrast .v2-osk-key,
+body.high-contrast .v2-osk-close {
+  border-color: #fff;
+  background: #111;
+  color: #fff;
+}
+
+body.high-contrast .v2-osk-key.is-active {
+  background: #fff;
+  color: #000;
+}
+
+@media (max-width: 820px), (orientation: portrait) {
+  .v2-osk {
+    padding-left: 7px;
+    padding-right: 7px;
+  }
+
+  .v2-osk-key {
+    min-width: 0;
+    flex: 1 1 0;
+    padding: 0 4px;
+  }
+
+  .v2-osk-key-wide {
+    flex: 1.25 1 0;
+  }
+
+  .v2-osk-key-space {
+    flex: 4 1 0;
+  }
+
+  .v2-osk-header {
+    margin-bottom: 6px;
+  }
+}
+
+@media (max-height: 760px) {
+  .v2-osk-key {
+    height: 38px;
+  }
+  .v2-osk-title { font-size: .9rem; }
+  .v2-osk-status { display: none; }
+}
