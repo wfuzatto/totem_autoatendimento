@@ -4,8 +4,9 @@ if (PHP_SAPI !== 'cli') { http_response_code(403); exit("Execute somente por CLI
 
 $config = require dirname(__DIR__) . '/config/config.php';
 $source = $argv[1] ?? '';
+$adminPassword = $argv[2] ?? (string)$config['admin_password'];
 if ($source === '' || !is_file($source)) {
-    fwrite(STDERR, "Uso: php tools/migrar_banco_v2.php /caminho/para/totem.sqlite\n");
+    fwrite(STDERR, "Uso: php tools/migrar_banco_v2.php /caminho/para/totem.sqlite [senha_admin]\n");
     exit(1);
 }
 
@@ -41,6 +42,17 @@ foreach ($missing as $row) {
         $row['room_number'] ?: null,
         $sourceType === 'integration' ? date('c') : null,
     ]);
+}
+
+// A V2 usa scrypt do Node (salt:hash). A V3 usa password_hash() do PHP.
+$hashStmt = $pdo->prepare("SELECT value FROM settings WHERE key='admin_password_hash'");
+$hashStmt->execute();
+$currentHash = (string)($hashStmt->fetchColumn() ?: '');
+$phpHashInfo = password_get_info($currentHash);
+if (($phpHashInfo['algoName'] ?? 'unknown') === 'unknown') {
+    $newHash = password_hash($adminPassword, PASSWORD_DEFAULT);
+    $pdo->prepare("INSERT INTO settings(key,value,updated_at) VALUES('admin_password_hash',?,CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP")->execute([$newHash]);
+    echo "Senha administrativa convertida para o formato PHP.\n";
 }
 
 echo "Schema V3 verificado e metadados administrativos preparados.\n";
