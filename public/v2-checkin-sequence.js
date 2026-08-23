@@ -8,6 +8,7 @@
   let cameraStream = null;
   let customFlowActive = false;
 
+  const ACTIVE_CHECKIN_KEY = 'totem-v2-active-checkin-reservation-id';
   const esc = value => String(value ?? '').replace(/[&<>'"]/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
   }[c]));
@@ -71,6 +72,9 @@
         stopCamera();
         customFlowActive = false;
         faceVerifiedThisAttempt = new Set();
+        activeReservationId = null;
+        latestBundle = null;
+        sessionStorage.removeItem(ACTIVE_CHECKIN_KEY);
         location.reload();
       };
     });
@@ -84,13 +88,24 @@
 
   function activateForBundle(bundle) {
     if (!bundle?.reservation?.id) return;
+
+    // Não capture reservas do fluxo de check-out. O mesmo endpoint de lookup é
+    // compartilhado pelos dois fluxos e uma hospedagem ativa também é checked_in.
+    const badge = app.querySelector('.step-badge')?.textContent || '';
+    if (/check-out/i.test(badge)) return;
+
     const status = String(bundle.reservation.status || '').toLowerCase();
-    if (status === 'checked_in' || status === 'checked_out') return;
+    if (status === 'checked_out') return;
+
+    // checked_in continua válido no ambiente de demonstração: a reserva demo é
+    // reutilizada várias vezes. O backend real/TOTVS continuará sendo a autoridade
+    // para impedir um segundo check-in quando estivermos fora do modo mock.
     if (activeReservationId !== bundle.reservation.id) {
       activeReservationId = bundle.reservation.id;
       faceVerifiedThisAttempt = new Set();
     }
     latestBundle = bundle;
+    try { sessionStorage.setItem(ACTIVE_CHECKIN_KEY, String(bundle.reservation.id)); } catch (_) {}
   }
 
   // Mantém o id da reserva de check-in mesmo com a aplicação-base encapsulando o estado.
@@ -109,6 +124,12 @@
 
   async function startSequence() {
     if (!activeReservationId && latestBundle?.reservation?.id) activeReservationId = latestBundle.reservation.id;
+    if (!activeReservationId) {
+      try {
+        const stored = Number(sessionStorage.getItem(ACTIVE_CHECKIN_KEY));
+        if (Number.isInteger(stored) && stored > 0) activeReservationId = stored;
+      } catch (_) {}
+    }
     if (!activeReservationId) {
       notify('Não foi possível identificar a reserva para continuar o check-in.', true);
       return;
@@ -376,7 +397,10 @@
         <p class="text-secondary">Retire suas pulseiras e siga para a acomodação.</p>
         <button class="btn btn-primary btn-touch mt-4" id="v2FinishHome">Finalizar</button>
       </section>`;
-      document.getElementById('v2FinishHome').onclick = () => location.reload();
+      document.getElementById('v2FinishHome').onclick = () => {
+        try { sessionStorage.removeItem(ACTIVE_CHECKIN_KEY); } catch (_) {}
+        location.reload();
+      };
     } catch (error) {
       notify(error.message, true);
     }
