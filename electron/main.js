@@ -71,16 +71,13 @@ ipcMain.on('kiosk-keyboard-input', (_event, payload = {}) => {
   const action = String(payload.action || '');
 
   if (action === 'char') {
-    const value = String(payload.value || '').slice(0, 4);
-    if (!value) return;
-    for (const char of Array.from(value)) {
-      win.webContents.sendInputEvent({ type: 'char', keyCode: char });
-    }
+    const value = String(payload.value || '').slice(0, 8);
+    if (value) win.webContents.insertText(value);
     return;
   }
 
   if (action === 'space') {
-    win.webContents.sendInputEvent({ type: 'char', keyCode: ' ' });
+    win.webContents.insertText(' ');
     return;
   }
 
