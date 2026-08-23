@@ -73,3 +73,40 @@ test('administrador pode configurar e remover imagem do QR Code gov.br', async (
   const after = await request(app).get('/api/v2/govbr-config');
   assert.equal(after.body.govbr_qr_configured, false);
 });
+
+test('administrador pode configurar link HTTPS do gov.br para o iframe do totem', async () => {
+  const login = await request(app)
+    .post('/api/admin/login')
+    .send({ password: '251933' });
+  assert.equal(login.status, 200);
+  const token = login.body.token;
+
+  const invalid = await request(app)
+    .put('/api/admin/v2/govbr-settings')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ govbr_hotel_url: 'http://exemplo.local/govbr' });
+  assert.equal(invalid.status, 400);
+  assert.match(invalid.body.error, /HTTPS/i);
+
+  const saved = await request(app)
+    .put('/api/admin/v2/govbr-settings')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ govbr_hotel_url: 'https://hotel.exemplo.com.br/govbr/checkin#etapa' });
+  assert.equal(saved.status, 200);
+  assert.equal(saved.body.ok, true);
+  assert.equal(saved.body.govbr_iframe_configured, true);
+  assert.equal(saved.body.govbr_hotel_url, 'https://hotel.exemplo.com.br/govbr/checkin');
+
+  const publicConfig = await request(app).get('/api/v2/govbr-config');
+  assert.equal(publicConfig.status, 200);
+  assert.equal(publicConfig.body.govbr_iframe_configured, true);
+  assert.equal(publicConfig.body.govbr_hotel_url, 'https://hotel.exemplo.com.br/govbr/checkin');
+
+  const cleared = await request(app)
+    .put('/api/admin/v2/govbr-settings')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ govbr_hotel_url: '' });
+  assert.equal(cleared.status, 200);
+  assert.equal(cleared.body.govbr_iframe_configured, false);
+  assert.equal(cleared.body.govbr_hotel_url, null);
+});
