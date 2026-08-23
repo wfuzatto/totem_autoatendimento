@@ -71,6 +71,11 @@
     return data;
   }
 
+  function advance(result, originalInput, originalButton) {
+    originalInput.value = result.reservation.reservation_number;
+    originalButton.click();
+  }
+
   function stopScanner() {
     clearInterval(scanTimer);
     scanTimer = null;
@@ -141,8 +146,7 @@
       setMessage('qrLookupMessage', 'Reserva encontrada.', false);
       stopScanner();
       hideQrProcessing();
-      originalInput.value = result.reservation.reservation_number;
-      originalButton.click();
+      advance(result, originalInput, originalButton);
     } catch (_) {
       await sleep(QR_PROCESSING_MIN_MS - (Date.now() - processingStartedAt));
       hideQrProcessing();
@@ -185,18 +189,20 @@
     input.value = digits;
   }
 
-  function enhance() {
-    const originalInput = document.getElementById('lookupInput');
-    const originalButton = app.querySelector('[data-action="lookup"]');
-    const originalCancel = app.querySelector('[data-action="cancel"]');
-    const isCheckout = Boolean(document.getElementById('simulateNfc'));
-
-    if (!originalInput || !originalButton || !originalCancel || isCheckout || enhanced) return;
-    enhanced = true;
-
+  function detachLegacy(originalInput, originalButton, originalCancel, originalSimulate = null) {
     originalInput.remove();
     originalButton.remove();
     originalCancel.remove();
+    if (originalSimulate) originalSimulate.remove();
+  }
+
+  function attachLegacy(nodes) {
+    const bridge = document.getElementById('legacyLookupBridge');
+    nodes.filter(Boolean).forEach(node => bridge.append(node));
+  }
+
+  function enhanceCheckin(originalInput, originalButton, originalCancel) {
+    detachLegacy(originalInput, originalButton, originalCancel);
 
     app.innerHTML = `<section class="panel-card checkin-lookup-panel">
       <div class="mb-4">
@@ -239,8 +245,7 @@
       <div id="legacyLookupBridge" hidden></div>
     </section>`;
 
-    const bridge = document.getElementById('legacyLookupBridge');
-    bridge.append(originalInput, originalButton, originalCancel);
+    attachLegacy([originalInput, originalButton, originalCancel]);
 
     document.getElementById('enhancedLookupCancel').onclick = () => {
       hideQrProcessing();
@@ -260,8 +265,7 @@
         const result = await lookup(value, 'reservation');
         setMessage('reservationLookupMessage', 'Reserva encontrada.', false);
         stopScanner();
-        originalInput.value = result.reservation.reservation_number;
-        originalButton.click();
+        advance(result, originalInput, originalButton);
       } catch (_) {
         setMessage('reservationLookupMessage', 'Número da reserva inválido', true);
       }
@@ -277,14 +281,141 @@
         const result = await lookup(value, 'cpf');
         setMessage('cpfLookupMessage', 'Reserva encontrada.', false);
         stopScanner();
-        originalInput.value = result.reservation.reservation_number;
-        originalButton.click();
+        advance(result, originalInput, originalButton);
       } catch (_) {
         setMessage('cpfLookupMessage', 'CPF inválido', true);
       }
     };
 
     startScanner(originalInput, originalButton);
+  }
+
+  function enhanceCheckout(originalInput, originalButton, originalCancel, originalSimulate) {
+    detachLegacy(originalInput, originalButton, originalCancel, originalSimulate);
+
+    app.innerHTML = `<section class="panel-card checkin-lookup-panel checkout-lookup-panel">
+      <div class="mb-4">
+        <div class="step-badge"><i class="bi bi-list-check"></i>Check-out · Etapa 1</div>
+        <h1 class="step-title">Encontre sua hospedagem</h1>
+        <div class="step-subtitle">Use uma das opções abaixo para localizar sua conta:</div>
+      </div>
+
+      <div class="checkin-lookup-grid checkout-lookup-grid">
+        <section class="lookup-option lookup-option-nfc">
+          <div class="lookup-option-title"><span class="lookup-number">1</span><div><strong>PULSEIRA NFC</strong><small>Aproxime a pulseira do leitor ACR122U</small></div></div>
+          <div class="nfc-reader-visual" aria-hidden="true">
+            <div class="nfc-reader-ring ring-1"></div>
+            <div class="nfc-reader-ring ring-2"></div>
+            <div class="nfc-reader-ring ring-3"></div>
+            <i class="bi bi-wifi nfc-reader-icon"></i>
+            <div class="nfc-reader-label">APROXIME A PULSEIRA</div>
+          </div>
+          <div id="nfcLookupMessage" class="lookup-message">Aguardando leitura da pulseira...</div>
+          <label class="form-label fw-semibold mt-2" for="nfcLookupInput">Código da pulseira</label>
+          <input id="nfcLookupInput" class="form-control touch-input" autocomplete="off" placeholder="Código lido pelo ACR122U">
+          <button id="nfcLookupBtn" class="btn btn-primary btn-touch w-100 mt-3"><i class="bi bi-wifi me-2"></i>Buscar pulseira</button>
+          ${originalSimulate ? '<button id="simulateCheckoutNfc" class="btn btn-outline-primary btn-touch w-100 mt-2"><i class="bi bi-lightning me-2"></i>Simular ACR122U</button>' : ''}
+        </section>
+
+        <section class="lookup-option">
+          <div class="lookup-option-title"><span class="lookup-number">2</span><div><strong>NÚMERO DA RESERVA</strong><small>Digite o número informado na confirmação</small></div></div>
+          <label class="form-label fw-semibold" for="checkoutReservationInput">Número da reserva</label>
+          <input id="checkoutReservationInput" class="form-control touch-input text-uppercase" autocomplete="off" placeholder="Ex.: RES-10025">
+          <div id="checkoutReservationMessage" class="lookup-message"></div>
+          <button id="checkoutReservationBtn" class="btn btn-primary btn-touch w-100 mt-3">Buscar reserva <i class="bi bi-arrow-right ms-2"></i></button>
+        </section>
+
+        <section class="lookup-option">
+          <div class="lookup-option-title"><span class="lookup-number">3</span><div><strong>UH / QUARTO</strong><small>Informe o número da unidade habitacional</small></div></div>
+          <label class="form-label fw-semibold" for="checkoutRoomInput">Número da UH</label>
+          <input id="checkoutRoomInput" class="form-control touch-input text-uppercase" autocomplete="off" placeholder="Ex.: 204">
+          <div id="checkoutRoomMessage" class="lookup-message"></div>
+          <button id="checkoutRoomBtn" class="btn btn-primary btn-touch w-100 mt-3">Buscar UH <i class="bi bi-arrow-right ms-2"></i></button>
+        </section>
+      </div>
+
+      <div class="flow-actions mt-4">
+        <button id="enhancedLookupCancel" class="btn btn-outline-danger btn-touch"><i class="bi bi-x-circle me-2"></i>Cancelar e recomeçar</button>
+      </div>
+      <div id="legacyLookupBridge" hidden></div>
+    </section>`;
+
+    attachLegacy([originalInput, originalButton, originalCancel, originalSimulate]);
+
+    document.getElementById('enhancedLookupCancel').onclick = () => {
+      enhanced = false;
+      originalCancel.click();
+    };
+
+    const completeCheckoutLookup = (result, messageId) => {
+      setMessage(messageId, 'Hospedagem encontrada.', false);
+      advance(result, originalInput, originalButton);
+    };
+
+    const nfcInput = document.getElementById('nfcLookupInput');
+    const nfcButton = document.getElementById('nfcLookupBtn');
+    nfcButton.onclick = async () => {
+      const value = nfcInput.value.trim();
+      if (value.length < 3) return setMessage('nfcLookupMessage', 'Pulseira inválida', true);
+      setMessage('nfcLookupMessage', 'Lendo pulseira...', false);
+      try {
+        const result = await lookup(value, 'auto');
+        const belongs = result.guests?.some(guest => String(guest.wristband_code || '').toLowerCase() === value.toLowerCase());
+        if (!belongs) throw new Error('Pulseira inválida');
+        completeCheckoutLookup(result, 'nfcLookupMessage');
+      } catch (_) {
+        setMessage('nfcLookupMessage', 'Pulseira inválida ou não vinculada a esta hospedagem', true);
+      }
+    };
+
+    const simulate = document.getElementById('simulateCheckoutNfc');
+    if (simulate) simulate.onclick = () => {
+      originalSimulate.click();
+      nfcInput.value = originalInput.value || 'SAGA-204-CARLOS';
+      nfcButton.click();
+    };
+
+    const reservationInput = document.getElementById('checkoutReservationInput');
+    document.getElementById('checkoutReservationBtn').onclick = async () => {
+      const value = reservationInput.value.trim();
+      if (!/^[A-Za-z0-9][A-Za-z0-9._\/-]{2,80}$/.test(value)) {
+        return setMessage('checkoutReservationMessage', 'Número da reserva inválido', true);
+      }
+      setMessage('checkoutReservationMessage', 'Buscando...', false);
+      try {
+        const result = await lookup(value, 'reservation');
+        completeCheckoutLookup(result, 'checkoutReservationMessage');
+      } catch (_) {
+        setMessage('checkoutReservationMessage', 'Número da reserva inválido', true);
+      }
+    };
+
+    const roomInput = document.getElementById('checkoutRoomInput');
+    document.getElementById('checkoutRoomBtn').onclick = async () => {
+      const value = roomInput.value.trim();
+      if (!/^[A-Za-z0-9._\/-]{1,20}$/.test(value)) return setMessage('checkoutRoomMessage', 'UH inválida', true);
+      setMessage('checkoutRoomMessage', 'Buscando...', false);
+      try {
+        const result = await lookup(value, 'auto');
+        if (String(result.reservation.room_number || '').toLowerCase() !== value.toLowerCase()) throw new Error('UH inválida');
+        completeCheckoutLookup(result, 'checkoutRoomMessage');
+      } catch (_) {
+        setMessage('checkoutRoomMessage', 'UH inválida ou sem hospedagem ativa', true);
+      }
+    };
+  }
+
+  function enhance() {
+    const originalInput = document.getElementById('lookupInput');
+    const originalButton = app.querySelector('[data-action="lookup"]');
+    const originalCancel = app.querySelector('[data-action="cancel"]');
+    const originalSimulate = document.getElementById('simulateNfc');
+
+    if (!originalInput || !originalButton || !originalCancel || enhanced) return;
+    enhanced = true;
+
+    if (originalSimulate) enhanceCheckout(originalInput, originalButton, originalCancel, originalSimulate);
+    else enhanceCheckin(originalInput, originalButton, originalCancel);
   }
 
   new MutationObserver(() => {
