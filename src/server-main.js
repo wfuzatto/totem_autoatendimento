@@ -4,9 +4,11 @@ const https = require('https');
 const app = require('./server-runtime');
 const { installCheckoutRuntime } = require('./checkout-runtime');
 const { installDocumentRemovalRuntime } = require('./document-removal-runtime');
+const { installV2Runtime } = require('./v2-runtime');
 
 installCheckoutRuntime(app);
 installDocumentRemovalRuntime(app);
+installV2Runtime(app);
 
 function start() {
   const port = Number(process.env.PORT || 3080);
