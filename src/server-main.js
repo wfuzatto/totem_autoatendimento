@@ -1,6 +1,20 @@
 const fs = require('fs');
 const http = require('http');
 const https = require('https');
+
+// Compatibilidade SQLite da V2: a implementação-base antiga compara a pulseira
+// com "" em uma consulta SQL. Em versões atuais do SQLite, aspas duplas são
+// identificadores e isso resulta em `no such column: ""`. Interceptamos apenas
+// essa consulta legada e a normalizamos para o literal SQL correto: ''.
+const { db } = require('./db');
+const originalPrepare = db.prepare.bind(db);
+db.prepare = sql => {
+  const normalized = typeof sql === 'string'
+    ? sql.replaceAll('wristband_code != ""', "wristband_code != ''")
+    : sql;
+  return originalPrepare(normalized);
+};
+
 const app = require('./server-runtime');
 const { installCheckoutRuntime } = require('./checkout-runtime');
 const { installDocumentRemovalRuntime } = require('./document-removal-runtime');
