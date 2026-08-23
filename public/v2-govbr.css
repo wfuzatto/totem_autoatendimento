@@ -5,6 +5,7 @@
 }
 
 .document-row[data-document-id] {
+  grid-template-columns: 1fr auto auto;
   gap: 12px;
   align-items: center;
 }
@@ -123,9 +124,10 @@ body.high-contrast .govbr-admin-empty small { color: #fff; }
 
 @media (max-width: 720px) {
   .document-row[data-document-id] {
-    flex-wrap: wrap;
+    grid-template-columns: 1fr auto;
   }
   .kiosk-remove-document {
+    grid-column: 1 / -1;
     width: 100%;
   }
 }
