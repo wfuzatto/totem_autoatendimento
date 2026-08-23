@@ -47,13 +47,51 @@ function validUploadToken(token) {
   return entry;
 }
 
-function currentGovbrQr() {
-  const filename = path.basename(runtimeSetting('govbr_qr_filename'));
+function imageRecord(settingKey) {
+  const filename = path.basename(runtimeSetting(settingKey));
   if (!filename) return null;
   const full = path.join(brandingDir, filename);
   if (!fs.existsSync(full)) return null;
   const stat = fs.statSync(full);
-  return { filename, full, url: `/api/branding/govbr-qr?v=${Math.floor(stat.mtimeMs)}` };
+  return { filename, full, mtime: Math.floor(stat.mtimeMs) };
+}
+
+function currentGovbrQr() {
+  const image = imageRecord('govbr_qr_filename');
+  if (!image) return null;
+  return { ...image, url: `/api/v2/media/govbr-qr?v=${image.mtime}` };
+}
+
+function currentCheckoutAd() {
+  const image = imageRecord('checkout_ad_filename');
+  if (!image) return null;
+  return { ...image, url: `/api/v2/media/checkout-ad?v=${image.mtime}` };
+}
+
+function imageMime(filename) {
+  const ext = path.extname(String(filename || '')).toLowerCase();
+  if (ext === '.png') return 'image/png';
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  if (ext === '.webp') return 'image/webp';
+  return 'application/octet-stream';
+}
+
+function sendImageBinary(res, image) {
+  if (!image) return res.status(404).end();
+  try {
+    const bytes = fs.readFileSync(image.full);
+    res.status(200);
+    res.setHeader('Content-Type', imageMime(image.filename));
+    res.setHeader('Content-Length', String(bytes.length));
+    res.setHeader('Content-Disposition', `inline; filename="${path.basename(image.filename).replace(/"/g, '')}"`);
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+    return res.end(bytes);
+  } catch (_) {
+    return res.status(404).end();
+  }
 }
 
 const govbrQrUpload = multer({
@@ -98,12 +136,13 @@ function installV2Runtime(app) {
     res.json(govbrConfig());
   });
 
-  app.get('/api/branding/govbr-qr', (_req, res) => {
-    const qr = currentGovbrQr();
-    if (!qr) return res.status(404).end();
-    res.setHeader('Cache-Control', 'no-store');
-    return res.sendFile(qr.full);
-  });
+  // Rotas V2 de mídia: resposta binária explícita para funcionar de forma
+  // idêntica atrás de Caddy/HTTPS e em acesso HTTP direto.
+  app.get('/api/v2/media/govbr-qr', (_req, res) => sendImageBinary(res, currentGovbrQr()));
+  app.get('/api/v2/media/checkout-ad', (_req, res) => sendImageBinary(res, currentCheckoutAd()));
+
+  // Mantém compatibilidade com URLs antigas já gravadas ou abertas no navegador.
+  app.get('/api/branding/govbr-qr', (_req, res) => sendImageBinary(res, currentGovbrQr()));
 
   app.get('/api/admin/v2/govbr-qr', requireAdmin, (_req, res) => {
     res.json(govbrConfig());
