@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#0d6efd">
+  <title>Totem de Autoatendimento</title>
+  <link href="/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+  <link href="/vendor/bootstrap-icons/bootstrap-icons.css" rel="stylesheet">
+  <link href="/styles.css" rel="stylesheet">
+</head>
+<body>
+  <header class="kiosk-header">
+    <div class="brand-wrap">
+      <div class="brand-mark"><i class="bi bi-building-check"></i></div>
+      <div>
+        <div class="brand-name" id="hotelName">Hotel</div>
+        <div class="brand-subtitle">Autoatendimento</div>
+      </div>
+    </div>
+    <button id="settingsBtn" class="icon-btn" aria-label="Abrir configurações" title="Configurações">
+      <i class="bi bi-gear-fill"></i>
+    </button>
+  </header>
+
+  <main class="kiosk-main" id="app" aria-live="polite"></main>
+
+  <div id="accessibilityToolbar" class="accessibility-toolbar" aria-label="Opções de acessibilidade">
+    <button class="a11y-btn" id="fontBtn" aria-label="Aumentar texto"><i class="bi bi-fonts"></i></button>
+    <button class="a11y-btn" id="contrastBtn" aria-label="Alto contraste"><i class="bi bi-circle-half"></i></button>
+    <button class="a11y-btn" id="speakBtn" aria-label="Ler tela em voz alta"><i class="bi bi-volume-up-fill"></i></button>
+  </div>
+
+  <div class="modal fade" id="adminLoginModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content kiosk-modal">
+        <div class="modal-header border-0">
+          <h2 class="modal-title h4">Configurações</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <label for="adminPassword" class="form-label">Senha de acesso</label>
+          <input type="password" inputmode="numeric" class="form-control form-control-lg touch-input" id="adminPassword" autocomplete="off">
+          <div class="text-danger mt-2" id="adminLoginError"></div>
+        </div>
+        <div class="modal-footer border-0">
+          <button class="btn btn-outline-secondary btn-lg" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn btn-primary btn-lg" id="adminLoginBtn">Entrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="adminModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content kiosk-modal admin-panel">
+        <div class="modal-header">
+          <div>
+            <h2 class="modal-title h3">Dashboard de configuração</h2>
+            <div class="text-secondary">Totem, integrações, hardware e regras do fluxo</div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body" id="adminBody"></div>
+        <div class="modal-footer d-flex justify-content-between">
+          <button class="btn btn-danger btn-lg" id="exitKioskBtn"><i class="bi bi-box-arrow-right me-2"></i>Sair do totem</button>
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary btn-lg" data-bs-dismiss="modal">Fechar</button>
+            <button class="btn btn-primary btn-lg" id="saveSettingsBtn"><i class="bi bi-floppy me-2"></i>Salvar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container position-fixed bottom-0 start-50 translate-middle-x p-3">
+    <div id="appToast" class="toast align-items-center border-0" role="status" aria-live="polite" aria-atomic="true">
+      <div class="d-flex">
+        <div class="toast-body" id="toastBody"></div>
+        <button type="button" class="btn-close me-2 m-auto" data-bs-dismiss="toast" aria-label="Fechar"></button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
