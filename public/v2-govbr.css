@@ -14,14 +14,73 @@
   margin-top: 24px;
 }
 
+.govbr-auth-box {
+  padding: clamp(20px, 3vw, 34px);
+}
+
+.govbr-auth-intro {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.govbr-methods {
+  display: grid;
+  grid-template-columns: minmax(280px, .78fr) minmax(420px, 1.4fr);
+  gap: 20px;
+  align-items: start;
+  margin-top: 24px;
+}
+
+.govbr-method-card {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid #dce8d7;
+  border-radius: 22px;
+  background: rgba(255,255,255,.9);
+  text-align: left;
+  box-shadow: 0 8px 26px rgba(16,24,40,.045);
+}
+
+.govbr-method-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.govbr-method-heading strong,
+.govbr-method-heading small {
+  display: block;
+}
+
+.govbr-method-heading strong {
+  font-size: 1.12rem;
+}
+
+.govbr-method-heading small {
+  margin-top: 2px;
+  color: #667085;
+}
+
+.govbr-method-number {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--kiosk-primary, #006b3c);
+  color: #fff;
+  font-weight: 850;
+}
+
 .govbr-hotel-qr {
-  width: min(100%, 430px);
-  margin: 18px auto 8px;
-  padding: 18px;
+  width: 100%;
+  margin: 8px auto 0;
+  padding: 14px;
   border: 1px solid rgba(0,107,60,.15);
-  border-radius: 24px;
+  border-radius: 20px;
   background: rgba(255,255,255,.82);
-  box-shadow: 0 12px 32px rgba(16,24,40,.06);
 }
 
 .govbr-qr-label {
@@ -57,8 +116,49 @@
 }
 
 .govbr-qr-missing {
-  max-width: 680px;
-  margin: 18px auto 10px;
+  margin: 8px 0 0;
+}
+
+.govbr-iframe-shell {
+  overflow: hidden;
+  border: 1px solid #d6e3d1;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.02);
+}
+
+.govbr-iframe-toolbar {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px 10px 16px;
+  border-bottom: 1px solid #e5ebe2;
+  background: #f6faf4;
+  color: #214536;
+  font-weight: 800;
+}
+
+.govbr-hotel-iframe {
+  display: block;
+  width: 100%;
+  height: clamp(520px, 65vh, 760px);
+  border: 0;
+  background: #fff;
+}
+
+.govbr-frame-help {
+  margin-top: 10px;
+  color: #667085;
+  font-size: .92rem;
+  line-height: 1.45;
+}
+
+.govbr-verification-action {
+  max-width: 720px;
+  margin: 24px auto 0;
+  text-align: center;
 }
 
 .govbr-admin-preview {
@@ -110,8 +210,14 @@
 .govbr-admin-empty i { font-size: 3rem; color: var(--kiosk-primary, #006b3c); }
 .govbr-admin-empty small { color: #7a8b81; }
 
+.govbr-admin-group {
+  padding: 4px 0;
+}
+
 body.high-contrast .govbr-hotel-qr,
-body.high-contrast .govbr-admin-preview {
+body.high-contrast .govbr-admin-preview,
+body.high-contrast .govbr-method-card,
+body.high-contrast .govbr-iframe-shell {
   background: #000;
   color: #fff;
   border-color: #fff;
@@ -120,7 +226,24 @@ body.high-contrast .govbr-qr-label,
 body.high-contrast .govbr-qr-help,
 body.high-contrast .govbr-admin-empty,
 body.high-contrast .govbr-admin-empty i,
-body.high-contrast .govbr-admin-empty small { color: #fff; }
+body.high-contrast .govbr-admin-empty small,
+body.high-contrast .govbr-method-heading small,
+body.high-contrast .govbr-frame-help { color: #fff; }
+body.high-contrast .govbr-iframe-toolbar {
+  background: #000;
+  color: #fff;
+  border-color: #fff;
+}
+
+@media (max-width: 980px), (orientation: portrait) {
+  .govbr-methods {
+    grid-template-columns: 1fr;
+  }
+
+  .govbr-hotel-iframe {
+    height: 680px;
+  }
+}
 
 @media (max-width: 720px) {
   .document-row[data-document-id] {
@@ -129,5 +252,18 @@ body.high-contrast .govbr-admin-empty small { color: #fff; }
   .kiosk-remove-document {
     grid-column: 1 / -1;
     width: 100%;
+  }
+
+  .govbr-method-card {
+    padding: 16px;
+  }
+
+  .govbr-iframe-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .govbr-hotel-iframe {
+    height: 620px;
   }
 }
