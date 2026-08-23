@@ -23,6 +23,16 @@ function ensureRuntimeSetting(key, value = '') {
   db.prepare('INSERT OR IGNORE INTO runtime_settings(key,value) VALUES(?,?)').run(key, value);
 }
 
+function normalizeGovbrUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  let parsed;
+  try { parsed = new URL(raw); } catch (_) { throw new Error('Informe uma URL válida para o fluxo gov.br do hotel.'); }
+  if (parsed.protocol !== 'https:') throw new Error('O link gov.br do hotel deve usar HTTPS.');
+  parsed.hash = '';
+  return parsed.toString();
+}
+
 function removeStoredFilename(filename) {
   if (!filename) return;
   const safeName = path.basename(String(filename));
@@ -69,12 +79,23 @@ function removeDocument({ reservationId, documentId }) {
   return { ok: true, status: 'pending', document_id: doc.id, message: 'Documento removido. Envie novamente o arquivo correto.' };
 }
 
+function govbrConfig() {
+  const qr = currentGovbrQr();
+  const url = runtimeSetting('govbr_hotel_url');
+  return {
+    govbr_qr_url: qr?.url || null,
+    govbr_qr_configured: Boolean(qr),
+    govbr_hotel_url: url || null,
+    govbr_iframe_configured: Boolean(url)
+  };
+}
+
 function installV2Runtime(app) {
   ensureRuntimeSetting('govbr_qr_filename', '');
+  ensureRuntimeSetting('govbr_hotel_url', '');
 
   app.get('/api/v2/govbr-config', (_req, res) => {
-    const qr = currentGovbrQr();
-    res.json({ govbr_qr_url: qr?.url || null, govbr_qr_configured: Boolean(qr) });
+    res.json(govbrConfig());
   });
 
   app.get('/api/branding/govbr-qr', (_req, res) => {
@@ -85,8 +106,19 @@ function installV2Runtime(app) {
   });
 
   app.get('/api/admin/v2/govbr-qr', requireAdmin, (_req, res) => {
-    const qr = currentGovbrQr();
-    res.json({ govbr_qr_url: qr?.url || null, govbr_qr_configured: Boolean(qr) });
+    res.json(govbrConfig());
+  });
+
+  app.put('/api/admin/v2/govbr-settings', requireAdmin, (req, res) => {
+    try {
+      if (Object.prototype.hasOwnProperty.call(req.body || {}, 'govbr_hotel_url')) {
+        setRuntimeSetting('govbr_hotel_url', normalizeGovbrUrl(req.body.govbr_hotel_url));
+      }
+      audit('admin.govbr_settings.updated', null, { keys: Object.keys(req.body || {}) });
+      return res.json({ ok: true, ...govbrConfig() });
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
+    }
   });
 
   app.post('/api/admin/v2/govbr-qr', requireAdmin, govbrQrUpload.single('qr'), (req, res) => {
@@ -101,8 +133,7 @@ function installV2Runtime(app) {
     fs.writeFileSync(path.join(brandingDir, filename), req.file.buffer);
     setRuntimeSetting('govbr_qr_filename', filename);
     audit('admin.govbr_qr.updated', null, { mimetype: req.file.mimetype, bytes: req.file.size });
-    const qr = currentGovbrQr();
-    return res.json({ ok: true, govbr_qr_url: qr.url });
+    return res.json({ ok: true, ...govbrConfig() });
   });
 
   app.delete('/api/admin/v2/govbr-qr', requireAdmin, (_req, res) => {
@@ -110,7 +141,7 @@ function installV2Runtime(app) {
     if (qr) { try { fs.unlinkSync(qr.full); } catch (_) {} }
     setRuntimeSetting('govbr_qr_filename', '');
     audit('admin.govbr_qr.removed');
-    return res.json({ ok: true });
+    return res.json({ ok: true, ...govbrConfig() });
   });
 
   app.delete('/api/public/upload/:token/:documentId', (req, res) => {
@@ -128,4 +159,4 @@ function installV2Runtime(app) {
   });
 }
 
-module.exports = { installV2Runtime };
+module.exports = { installV2Runtime, normalizeGovbrUrl };
