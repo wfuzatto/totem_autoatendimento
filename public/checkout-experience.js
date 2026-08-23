@@ -74,6 +74,12 @@
     const authorization = lastCheckout?.authorization;
     const print = authorization?.print;
     const printingOk = print?.ok !== false;
+    const simulated = print?.mode === 'mock';
+    const printMessage = !printingOk
+      ? '<span class="status-pill status-pending"><i class="bi bi-exclamation-triangle-fill"></i> Impressora indisponível — apresente o QR Code abaixo na portaria</span>'
+      : simulated
+        ? '<span class="status-pill status-pending"><i class="bi bi-info-circle-fill"></i> Guia gerada em modo simulado — ative ESC/POS nas configurações para impressão real</span>'
+        : '<span class="status-pill status-ok"><i class="bi bi-check-circle-fill"></i> Guia impressa na POS 80 mm</span>';
 
     app.innerHTML = `
       <section class="panel-card checkout-complete-screen">
@@ -86,10 +92,7 @@
             <div>
               <div class="checkout-exit-title"><i class="bi bi-printer-fill me-2"></i>Autorização de saída</div>
               <div class="text-secondary">Comprovante <strong>${esc(authorization.receipt_number)}</strong></div>
-              <div class="mt-2">${printingOk
-                ? '<span class="status-pill status-ok"><i class="bi bi-check-circle-fill"></i> Guia enviada para a impressora POS</span>'
-                : '<span class="status-pill status-pending"><i class="bi bi-exclamation-triangle-fill"></i> Impressora indisponível — apresente o QR Code abaixo na portaria</span>'}
-              </div>
+              <div class="mt-2">${printMessage}</div>
             </div>
             <img class="checkout-exit-qr" src="${esc(authorization.qr_data_url)}" alt="QR Code da autorização de saída">
           </div>` : `
