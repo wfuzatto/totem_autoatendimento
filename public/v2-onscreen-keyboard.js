@@ -15,6 +15,7 @@
   let lastIframeFocused = false;
 
   const isElectronBridge = () => Boolean(window.kiosk && typeof window.kiosk.sendVirtualKey === 'function');
+  const canRememberIframe = () => Boolean(window.kiosk && typeof window.kiosk.rememberVirtualKeyboardTarget === 'function');
 
   const textRows = [
     ['1','2','3','4','5','6','7','8','9','0'],
@@ -38,6 +39,11 @@
     return item;
   }
 
+  function rememberIframeTarget() {
+    if (!canRememberIframe()) return;
+    try { window.kiosk.rememberVirtualKeyboardTarget(); } catch (_) {}
+  }
+
   function ensureKeyboard() {
     if (keyboard) return;
     keyboard = document.createElement('section');
@@ -52,24 +58,29 @@
           <div class="v2-osk-title"><i class="bi bi-keyboard-fill me-2"></i>Teclado na tela</div>
           <div class="v2-osk-status" id="v2OskStatus">Toque em um campo para digitar.</div>
         </div>
-        <button type="button" class="v2-osk-close" data-osk-action="hide" aria-label="Fechar teclado"><i class="bi bi-x-lg"></i></button>
+        <button type="button" tabindex="-1" class="v2-osk-close" data-osk-action="hide" aria-label="Fechar teclado"><i class="bi bi-x-lg"></i></button>
       </div>
       <div class="v2-osk-keys" id="v2OskKeys"></div>`;
     document.body.appendChild(keyboard);
     keysHost = keyboard.querySelector('#v2OskKeys');
     status = keyboard.querySelector('#v2OskStatus');
 
+    // Processa a tecla no pointerdown. O preventDefault impede que o botão do
+    // teclado roube o foco do campo que está dentro de um iframe cross-origin.
     keyboard.addEventListener('pointerdown', event => {
+      const key = event.target.closest?.('[data-osk-action]');
       event.preventDefault();
       event.stopPropagation();
-    });
-    keyboard.addEventListener('click', event => {
-      const key = event.target.closest('[data-osk-action]');
       if (!key) return;
-      event.preventDefault();
-      event.stopPropagation();
       handleKey(key.dataset.oskAction, key.dataset.oskValue || '');
-    });
+    }, true);
+
+    // O clique posterior ao pointerdown não deve alterar foco nem repetir a tecla.
+    keyboard.addEventListener('click', event => {
+      if (!event.target.closest?.('[data-osk-action]')) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, true);
   }
 
   function inferLayout(element) {
@@ -102,14 +113,17 @@
     activeTarget = mode === 'local' ? target : null;
     layoutMode = forcedLayout || (mode === 'local' ? inferLayout(target) : 'text');
     shift = false;
+
+    if (mode === 'iframe') rememberIframeTarget();
+
     renderKeys();
     keyboard.hidden = false;
     document.body.classList.add('v2-keyboard-open');
 
     if (mode === 'iframe') {
       status.textContent = isElectronBridge()
-        ? 'Toque no campo do formulário gov.br e use o teclado abaixo.'
-        : 'No navegador externo, os campos do iframe usam o teclado do sistema. No modo kiosk Electron, este teclado digita diretamente no formulário.';
+        ? 'Campo do formulário externo selecionado. Digite normalmente no teclado abaixo.'
+        : 'Em navegador comum, um iframe externo só pode receber o teclado do próprio sistema. No kiosk Electron este teclado funciona diretamente.';
     } else {
       const label = target?.getAttribute?.('aria-label') || target?.getAttribute?.('placeholder') || target?.name || 'campo selecionado';
       status.textContent = `Digitando em: ${label}`;
@@ -184,15 +198,22 @@
     const fields = [...document.querySelectorAll(editableSelector)].filter(el => !el.disabled && !el.readOnly && el.offsetParent !== null);
     const index = fields.indexOf(activeTarget);
     const next = fields[index + 1] || fields[0];
-    if (next) next.focus();
+    if (next) {
+      activeTarget = next;
+      next.focus({ preventScroll:true });
+      layoutMode = inferLayout(next);
+      renderKeys();
+    }
   }
 
   function sendToIframe(action, value = '') {
     if (isElectronBridge()) {
-      window.kiosk.sendVirtualKey({ action, value });
+      rememberIframeTarget();
+      window.kiosk.sendVirtualKey({ target:'iframe', action, value });
       return true;
     }
 
+    // Fallback apenas para iframe same-origin. Cross-origin é bloqueado pelo navegador.
     const frame = document.getElementById('govbrHotelFrame');
     try {
       const focused = frame?.contentDocument?.activeElement;
@@ -232,7 +253,7 @@
 
     if (targetMode === 'iframe') {
       const sent = sendToIframe(action, value);
-      if (!sent && status) status.textContent = 'Toque primeiro em um campo do formulário gov.br. No navegador externo, use também o teclado do sistema.';
+      if (!sent && status) status.textContent = 'Toque primeiro em um campo do formulário. Em navegador externo, use o teclado do sistema.';
       return;
     }
 
@@ -260,16 +281,22 @@
       if (toolbar.querySelector('[data-v2-iframe-keyboard]')) return;
       const button = document.createElement('button');
       button.type = 'button';
+      button.tabIndex = -1;
       button.className = 'btn btn-outline-primary btn-sm v2-iframe-keyboard-btn';
       button.dataset.v2IframeKeyboard = '1';
       button.innerHTML = '<i class="bi bi-keyboard-fill me-1"></i>Teclado na tela';
-      button.addEventListener('pointerdown', event => event.preventDefault());
+
+      // Também abre no pointerdown para não retirar o foco de um input do iframe.
+      button.addEventListener('pointerdown', event => {
+        event.preventDefault();
+        event.stopPropagation();
+        rememberIframeTarget();
+        showKeyboard('iframe');
+      }, true);
       button.addEventListener('click', event => {
         event.preventDefault();
-        showKeyboard('iframe');
-        const frame = document.getElementById('govbrHotelFrame');
-        try { frame?.focus({ preventScroll:true }); } catch (_) {}
-      });
+        event.stopImmediatePropagation();
+      }, true);
       toolbar.appendChild(button);
     });
   }
@@ -285,7 +312,10 @@
     if (event.target.closest?.('[data-v2-iframe-keyboard]')) return;
     if (isEditable(event.target)) return;
     const frame = event.target.closest?.('#govbrHotelFrame');
-    if (frame) return showKeyboard('iframe');
+    if (frame) {
+      rememberIframeTarget();
+      return showKeyboard('iframe');
+    }
     setTimeout(() => {
       const active = document.activeElement;
       if (!isEditable(active) && active?.id !== 'govbrHotelFrame') hideKeyboard();
@@ -296,9 +326,10 @@
     decorateGovbrIframe();
     const active = document.activeElement;
     const iframeFocused = active?.id === 'govbrHotelFrame';
+    if (iframeFocused) rememberIframeTarget();
     if (iframeFocused && !lastIframeFocused) showKeyboard('iframe');
     lastIframeFocused = iframeFocused;
-  }, 250);
+  }, 200);
 
   const app = document.getElementById('app');
   if (app) new MutationObserver(decorateGovbrIframe).observe(app, { childList:true, subtree:true });
