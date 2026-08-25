@@ -9,7 +9,7 @@ $logo = htmlspecialchars(branding_url('logo_filename') ?: app_url('assets/logo.p
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <meta name="theme-color" content="#006b3c">
   <title><?= $hotel ?> · Autoatendimento V3</title>
-  <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/app.css')) ?>?v=3">
+  <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/app.css')) ?>?v=4">
 </head>
 <body>
 <header class="topbar">
@@ -29,7 +29,8 @@ $logo = htmlspecialchars(branding_url('logo_filename') ?: app_url('assets/logo.p
 <div id="toast" class="toast hidden"></div>
 <div id="modalRoot"></div>
 <script>window.TOTEM_BASE=<?= json_encode(app_base_path(), JSON_UNESCAPED_SLASHES) ?>;</script>
-<script src="<?= htmlspecialchars(app_url('assets/keyboard.js')) ?>?v=3"></script>
-<script src="<?= htmlspecialchars(app_url('assets/kiosk.js')) ?>?v=3"></script>
+<script src="<?= htmlspecialchars(app_url('assets/keyboard.js')) ?>?v=4"></script>
+<script src="<?= htmlspecialchars(app_url('assets/device-preferences.js')) ?>?v=4"></script>
+<script src="<?= htmlspecialchars(app_url('assets/kiosk.js')) ?>?v=4"></script>
 </body>
 </html>
