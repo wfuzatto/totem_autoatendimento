@@ -9,7 +9,7 @@ $logo = htmlspecialchars(branding_url('logo_filename') ?: app_url('assets/logo.p
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
   <meta name="theme-color" content="#006b3c">
   <title><?= $hotel ?> · Autoatendimento V3</title>
-  <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/app.css')) ?>?v=4">
+  <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/app.css')) ?>?v=5">
 </head>
 <body>
 <header class="topbar">
@@ -17,7 +17,7 @@ $logo = htmlspecialchars(branding_url('logo_filename') ?: app_url('assets/logo.p
     <img id="brandLogo" src="<?= $logo ?>" alt="<?= $hotel ?>">
     <div><strong id="hotelName"><?= $hotel ?></strong><small>Autoatendimento · V3 PHP</small></div>
   </div>
-  <button id="settingsBtn" class="icon-btn" type="button" aria-label="Configurações">⚙</button>
+  <button id="settingsBtn" class="icon-btn" type="button" aria-label="Configurações" title="Clique: configurações · Segure 3 segundos: tela cheia">⚙</button>
 </header>
 <main id="app" class="kiosk-main" aria-live="polite"></main>
 <div id="accessibility" class="accessibility">
@@ -29,8 +29,8 @@ $logo = htmlspecialchars(branding_url('logo_filename') ?: app_url('assets/logo.p
 <div id="toast" class="toast hidden"></div>
 <div id="modalRoot"></div>
 <script>window.TOTEM_BASE=<?= json_encode(app_base_path(), JSON_UNESCAPED_SLASHES) ?>;</script>
-<script src="<?= htmlspecialchars(app_url('assets/keyboard.js')) ?>?v=4"></script>
-<script src="<?= htmlspecialchars(app_url('assets/device-preferences.js')) ?>?v=4"></script>
-<script src="<?= htmlspecialchars(app_url('assets/kiosk.js')) ?>?v=4"></script>
+<script src="<?= htmlspecialchars(app_url('assets/keyboard.js')) ?>?v=5"></script>
+<script src="<?= htmlspecialchars(app_url('assets/device-preferences.js')) ?>?v=5"></script>
+<script src="<?= htmlspecialchars(app_url('assets/kiosk.js')) ?>?v=5"></script>
 </body>
 </html>
