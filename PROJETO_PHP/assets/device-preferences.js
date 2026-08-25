@@ -4,7 +4,8 @@
   const prefs={onscreen_keyboard_enabled:true,qr_camera_device_id:''};
   const media=navigator.mediaDevices;
   const nativeGetUserMedia=media?.getUserMedia ? media.getUserMedia.bind(media) : null;
-  let longPressTimer=null;
+  let pressStartedAt=0;
+  let pressReadyTimer=null;
   let longPressTriggered=false;
 
   window.TOTEM_ONSCREEN_KEYBOARD_ENABLED=true;
@@ -29,7 +30,6 @@
     return false;
   }
 
-  // Aplica a câmera configurada somente às chamadas usadas pelo leitor de QR.
   if(media && nativeGetUserMedia){
     media.getUserMedia=(constraints={})=>{
       const chosen=String(prefs.qr_camera_device_id||'');
@@ -88,19 +88,27 @@
 
   async function enumerateCameras(select,{requestPermission=true}={}){
     if(!select)return;
+    const status=document.getElementById('qrCameraStatus');
     select.disabled=true;
     select.innerHTML='';
     addOption(select,'Detectando câmeras...','');
 
+    if(!window.isSecureContext){
+      select.innerHTML='';
+      addOption(select,'HTTPS necessário para acessar câmeras','__https__');
+      if(status)status.textContent='O navegador bloqueia getUserMedia em HTTP por IP. Abra a V3 em HTTPS para detectar as câmeras USB.';
+      return;
+    }
+
     if(!media?.enumerateDevices){
       select.innerHTML='';
-      addOption(select,'Enumeração de câmeras não suportada','');
+      addOption(select,'Enumeração de câmeras não suportada','__unsupported__');
+      if(status)status.textContent='Este navegador não oferece navigator.mediaDevices.enumerateDevices().';
       return;
     }
 
     let permissionStream=null;
     try{
-      // Sem uma permissão concedida, vários navegadores retornam deviceId/label vazios.
       if(requestPermission && nativeGetUserMedia){
         permissionStream=await nativeGetUserMedia({video:true,audio:false});
       }
@@ -114,22 +122,18 @@
       if(prefs.qr_camera_device_id && !devices.some(d=>d.deviceId===prefs.qr_camera_device_id)){
         addOption(select,'Câmera salva (não encontrada agora)',prefs.qr_camera_device_id,true);
       }
-      if(!devices.length){
-        addOption(select,'Nenhuma câmera encontrada','__none__');
-      }
+      if(!devices.length)addOption(select,'Nenhuma câmera encontrada','__none__');
       select.disabled=false;
-      const status=document.getElementById('qrCameraStatus');
       if(status){
         status.textContent=devices.length
-          ? `${devices.length} câmera(s) encontrada(s). A seleção fica salva neste totem.`
+          ? `${devices.length} câmera(s) encontrada(s). A câmera escolhida será usada nos leitores de QR.`
           : 'Nenhuma câmera de vídeo foi encontrada pelo navegador.';
       }
     }catch(error){
       select.innerHTML='';
       addOption(select,'Permissão de câmera necessária','__permission__');
       select.disabled=false;
-      const status=document.getElementById('qrCameraStatus');
-      if(status)status.textContent=`Não foi possível listar câmeras: ${error.name||error.message}`;
+      if(status)status.textContent=`Não foi possível listar câmeras: ${error.name||error.message}. Verifique a permissão de câmera do navegador.`;
     }finally{
       permissionStream?.getTracks?.().forEach(track=>track.stop());
     }
@@ -141,7 +145,7 @@
         <h3>Tela, teclado e câmera QR</h3>
         <label class="switch-line">
           <span><strong>Exibir teclado virtual</strong><small style="display:block;color:var(--muted);font-weight:400;margin-top:3px">Desative quando o equipamento já mostrar o teclado nativo em modo tablet.</small></span>
-          <input type="checkbox" id="onscreenKeyboardEnabled">
+          <input type="checkbox" id="onscreenKeyboardEnabled" aria-label="Exibir teclado virtual">
         </label>
         <div class="settings-grid" style="margin-top:16px">
           <div>
@@ -209,7 +213,6 @@
       refresh.textContent='↻ Detectar câmeras novamente';
     });
 
-    // Detecta automaticamente ao abrir a configuração.
     enumerateCameras(camera,{requestPermission:true});
   }
 
@@ -236,25 +239,35 @@
     if(!gear || gear.dataset.longPressReady==='1')return;
     gear.dataset.longPressReady='1';
 
-    const cancel=()=>{
-      clearTimeout(longPressTimer);
-      longPressTimer=null;
-    };
+    function clearReady(){
+      clearTimeout(pressReadyTimer);
+      pressReadyTimer=null;
+      gear.classList.remove('long-press-active');
+    }
 
-    gear.addEventListener('pointerdown',()=>{
+    gear.addEventListener('pointerdown',event=>{
       longPressTriggered=false;
-      cancel();
-      longPressTimer=setTimeout(async()=>{
-        longPressTriggered=true;
+      pressStartedAt=performance.now();
+      clearReady();
+      try{gear.setPointerCapture?.(event.pointerId)}catch(_){ }
+      pressReadyTimer=setTimeout(()=>{
         gear.classList.add('long-press-active');
-        navigator.vibrate?.(80);
-        await toggleFullscreen();
-        setTimeout(()=>gear.classList.remove('long-press-active'),250);
+        navigator.vibrate?.(60);
       },3000);
     });
-    ['pointerup','pointercancel','pointerleave'].forEach(name=>gear.addEventListener(name,cancel));
 
-    // Evita que o mesmo toque longo abra Configurações depois de alternar fullscreen.
+    gear.addEventListener('pointerup',async event=>{
+      const duration=performance.now()-pressStartedAt;
+      clearReady();
+      try{gear.releasePointerCapture?.(event.pointerId)}catch(_){ }
+      if(duration<3000)return;
+      longPressTriggered=true;
+      // pointerup mantém o gesto de usuário exigido pela Fullscreen API.
+      await toggleFullscreen();
+    });
+
+    ['pointercancel','lostpointercapture'].forEach(name=>gear.addEventListener(name,clearReady));
+
     gear.addEventListener('click',event=>{
       if(!longPressTriggered)return;
       event.preventDefault();
