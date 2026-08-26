@@ -3,8 +3,15 @@ declare(strict_types=1);
 
 function command_path(string $name): ?string
 {
-    $path = trim((string)@shell_exec('command -v ' . escapeshellarg($name) . ' 2>/dev/null'));
-    return $path !== '' ? $path : null;
+    if (!function_exists('shell_exec')) return null;
+    $isWindows = DIRECTORY_SEPARATOR === '\\';
+    $lookup = $isWindows
+        ? 'where ' . escapeshellarg($name) . ' 2>NUL'
+        : 'command -v ' . escapeshellarg($name) . ' 2>/dev/null';
+    $path = trim((string)@shell_exec($lookup));
+    if ($path === '') return null;
+    $first = preg_split('/\r?\n/', $path)[0] ?? '';
+    return trim($first) !== '' ? trim($first) : null;
 }
 
 function cpf_valid(string $value): bool
@@ -42,12 +49,12 @@ function extract_valid_cpf_from_text(string $text): ?string
 function run_tesseract(string $image): string
 {
     $tesseract = command_path('tesseract');
-    if (!$tesseract) throw new RuntimeException('Tesseract não instalado.');
+    if (!$tesseract || !function_exists('shell_exec')) throw new RuntimeException('OCR opcional não instalado.');
     $languages = 'por+eng';
-    $cmd = escapeshellcmd($tesseract) . ' ' . escapeshellarg($image) . ' stdout -l ' . escapeshellarg($languages) . ' --psm 6 2>/dev/null';
+    $cmd = escapeshellarg($tesseract) . ' ' . escapeshellarg($image) . ' stdout -l ' . escapeshellarg($languages) . ' --psm 6 2>' . (DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null');
     $text = (string)@shell_exec($cmd);
     if (trim($text) === '') {
-        $cmd = escapeshellcmd($tesseract) . ' ' . escapeshellarg($image) . ' stdout --psm 6 2>/dev/null';
+        $cmd = escapeshellarg($tesseract) . ' ' . escapeshellarg($image) . ' stdout --psm 6 2>' . (DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null');
         $text = (string)@shell_exec($cmd);
     }
     return $text;
@@ -58,12 +65,13 @@ function ocr_identity_file(string $file, string $mime): string
     if ($mime !== 'application/pdf') return run_tesseract($file);
 
     $pdftoppm = command_path('pdftoppm');
-    if (!$pdftoppm) throw new RuntimeException('Poppler/pdftoppm não instalado para validar PDF.');
-    $tmp = sys_get_temp_dir() . '/totem-ocr-' . bin2hex(random_bytes(8));
+    if (!$pdftoppm || !function_exists('shell_exec')) throw new RuntimeException('Poppler/pdftoppm não instalado para validar PDF.');
+    $tmp = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'totem-ocr-' . bin2hex(random_bytes(8));
     if (!mkdir($tmp, 0700, true) && !is_dir($tmp)) throw new RuntimeException('Falha ao criar diretório temporário de OCR.');
-    $prefix = $tmp . '/page';
+    $prefix = $tmp . DIRECTORY_SEPARATOR . 'page';
     try {
-        $cmd = escapeshellcmd($pdftoppm) . ' -f 1 -l 3 -r 220 -jpeg ' . escapeshellarg($file) . ' ' . escapeshellarg($prefix) . ' 2>/dev/null';
+        $null = DIRECTORY_SEPARATOR === '\\' ? 'NUL' : '/dev/null';
+        $cmd = escapeshellarg($pdftoppm) . ' -f 1 -l 3 -r 220 -jpeg ' . escapeshellarg($file) . ' ' . escapeshellarg($prefix) . ' 2>' . $null;
         @shell_exec($cmd);
         $images = glob($prefix . '-*.jpg') ?: [];
         if (!$images) throw new RuntimeException('Não foi possível renderizar o PDF para validação.');
@@ -71,16 +79,17 @@ function ocr_identity_file(string $file, string $mime): string
         foreach (array_slice($images, 0, 3) as $image) $text .= "\n" . run_tesseract($image);
         return $text;
     } finally {
-        foreach (glob($tmp . '/*') ?: [] as $f) @unlink($f);
+        foreach (glob($tmp . DIRECTORY_SEPARATOR . '*') ?: [] as $f) @unlink($f);
         @rmdir($tmp);
     }
 }
 
 function validate_identity_upload_file(string $file, string $mime): array
 {
-    // Se OCR não estiver disponível, mantém o upload funcional, mas informa modo básico.
-    // diagnostico.php deixa essa limitação visível para a implantação.
+    // O núcleo XAMPP funciona sem OCR. Quando Tesseract/Poppler estão presentes,
+    // a validação avançada é ativada automaticamente sem mudar o fluxo visual.
     if (!command_path('tesseract')) return ['ok'=>true, 'mode'=>'basic-no-ocr'];
+    if ($mime === 'application/pdf' && !command_path('pdftoppm')) return ['ok'=>true, 'mode'=>'basic-no-pdf-ocr'];
 
     $text = normalize_ocr_text(ocr_identity_file($file, $mime));
     if (strlen(trim($text)) < 80) throw new InvalidArgumentException('Documento ilegível ou sem conteúdo suficiente para validação.');
