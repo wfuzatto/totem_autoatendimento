@@ -5,6 +5,7 @@ $logo = htmlspecialchars(branding_url('logo_filename') ?: app_url('assets/logo.p
 $skinRaw = (string)setting('theme_skin', 'vale_mantiqueira');
 $skin = in_array($skinRaw, ['vale_mantiqueira','neutral'], true) ? $skinRaw : 'vale_mantiqueira';
 $themeColor = $skin === 'neutral' ? '#0d6efd' : '#006b3c';
+$loadingEnabled = setting_bool('show_transition_loading', true);
 ?><!doctype html>
 <html lang="pt-BR">
 <head>
@@ -59,12 +60,16 @@ $themeColor = $skin === 'neutral' ? '#0d6efd' : '#006b3c';
   <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
   <div id="modalRoot"></div>
 
-  <script>window.TOTEM_BASE=<?= json_encode(app_base_path(), JSON_UNESCAPED_SLASHES) ?>;</script>
+  <script>
+    window.TOTEM_BASE=<?= json_encode(app_base_path(), JSON_UNESCAPED_SLASHES) ?>;
+    window.TOTEM_LOADING_ENABLED=<?= $loadingEnabled ? 'true' : 'false' ?>;
+  </script>
   <script src="<?= htmlspecialchars(app_url('assets/v2-restored-keyboard.js')) ?>?v=8"></script>
   <script src="<?= htmlspecialchars(app_url('assets/local-device-storage.js')) ?>?v=12"></script>
   <script src="<?= htmlspecialchars(app_url('assets/device-preferences.js')) ?>?v=12"></script>
   <script src="<?= htmlspecialchars(app_url('assets/v2-restored-kiosk.js')) ?>?v=8"></script>
-  <script src="<?= htmlspecialchars(app_url('assets/transition-loading.js')) ?>?v=15"></script>
+  <script src="<?= htmlspecialchars(app_url('assets/transition-loading.js')) ?>?v=16"></script>
+  <script src="<?= htmlspecialchars(app_url('assets/loading-settings.js')) ?>?v=16"></script>
   <script src="<?= htmlspecialchars(app_url('assets/v2-home-icons.js')) ?>?v=9"></script>
   <script src="<?= htmlspecialchars(app_url('assets/v2-admin-visuals.js')) ?>?v=13"></script>
   <script src="<?= htmlspecialchars(app_url('assets/settings-always-auth.js')) ?>?v=11"></script>
