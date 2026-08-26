@@ -1,17 +1,20 @@
 <?php
-$original = dirname(__DIR__, 2) . '/public/assets/skins/vale-mantiqueira/logo.jpg';
-if (is_file($original)) {
-    header('Content-Type: image/jpeg');
-    header('Cache-Control: public, max-age=3600');
-    readfile($original);
+declare(strict_types=1);
+
+$file = __DIR__ . '/logo-original.base64';
+$raw = is_file($file) ? (string)file_get_contents($file) : '';
+$base64 = preg_replace('/\s+/', '', $raw) ?? '';
+$image = $base64 !== '' ? base64_decode($base64, true) : false;
+
+if ($image === false || $image === '') {
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Cache-Control: no-store');
+    echo 'Logo original não encontrada na distribuição XAMPP.';
     exit;
 }
-header('Content-Type: image/svg+xml; charset=utf-8');
-header('Cache-Control: no-store');
-echo <<<'SVG'
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 180">
-  <rect width="760" height="180" fill="white"/>
-  <text x="380" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="42" font-weight="700" fill="#006b3c">Hotel Fazenda</text>
-  <text x="380" y="128" text-anchor="middle" font-family="Arial, sans-serif" font-size="48" font-weight="800" fill="#73b842">Vale da Mantiqueira</text>
-</svg>
-SVG;
+
+header('Content-Type: image/jpeg');
+header('Content-Length: ' . strlen($image));
+header('Cache-Control: public, max-age=3600');
+echo $image;
