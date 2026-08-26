@@ -14,6 +14,10 @@ DirectoryIndex index.php
   Header always set Permissions-Policy "camera=(self), microphone=(), geolocation=()"
 </IfModule>
 
+<Files "logo-original.base64">
+  Require all denied
+</Files>
+
 <FilesMatch "^(?:\.env|\.ht|composer\.(?:json|lock)|package(?:-lock)?\.json|.*\.(?:sqlite|sqlite3|db|sql))$">
   Require all denied
 </FilesMatch>
