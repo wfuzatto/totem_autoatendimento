@@ -1,166 +1,276 @@
-# Totem Autoatendimento V3 — PHP / XAMPP
+# Totem Autoatendimento V3 — XAMPP autocontido
 
-Implementação PHP da V3 do totem do Hotel Fazenda Vale da Mantiqueira. Esta pasta é independente do backend Node.js das versões anteriores e foi preparada para rodar diretamente no Apache/XAMPP.
+A pasta `PROJETO_PHP` é a distribuição da V3 para XAMPP. O núcleo roda diretamente em **Apache + PHP + SQLite**, sem Node.js, npm, Docker, Caddy, NGINX, Composer ou `qrencode`.
 
-## Stack
+## Regra visual
 
-- PHP 8.1+ (recomendado 8.2/8.3)
-- Apache/XAMPP
-- PDO SQLite
-- HTML/CSS/JavaScript sem framework obrigatório
-- Sessão PHP para autenticação administrativa
-- SQLite em `data/totem.sqlite`
-- `qrencode` para QR Codes locais
-- Tesseract + Poppler para validação OCR de CNH/RG/CIN
+A interface aprovada da V2 é a referência canônica da V3.
 
-Não usa Node.js, npm, Docker ou Composer.
+Não alterar ou simplificar por causa do backend PHP:
 
-## Estrutura
+- layout, identidade visual, proporções, cores e comportamento aprovados;
+- Check-in com opções **separadas**: QR Code, Número da reserva e CPF do titular;
+- Check-out com opções **separadas**: QR Code, Pulseira NFC, Número da reserva e UH;
+- teclado virtual no desenho da V2;
+- etapas de documentos, facial, gov.br, pulseiras, pagamento e conclusão;
+- acessibilidade e propaganda final.
 
-- `index.php` — totem: check-in, check-out e configurações
-- `reservas.php` — dashboard administrativo e reserva manual
-- `upload.php` — envio de documentos pelo celular
-- `portaria.php` — validação/consumo da autorização de saída
-- `diagnostico.php` — verifica o ambiente PHP/XAMPP
-- `api.php` — API da aplicação
-- `app/core.php` — banco, autenticação e serviços
-- `app/document_validator.php` — OCR local e validação de identidade
-- `app/adapters.php` — limites para TOTVS, PC/SC e SiTef
-- `database/schema.sql` — schema SQLite completo
-- `data/` — banco SQLite criado automaticamente
-- `uploads/` — documentos recebidos
-- `branding/` — logo, propaganda e QR gov.br
-- `tools/migrar_banco_v2.php` — migração segura do SQLite V2
-- `tools/smoke.php` — smoke test sem PHPUnit
-- `tools/instalar_xampp_ubuntu.sh` — helper de instalação por symlink
+As funções novas da V3 são adicionadas sem redesenhar o totem.
 
-## Instalação no XAMPP
+## Requisitos obrigatórios
 
-A forma mais prática usando o worktree V3 é:
+- XAMPP com Apache
+- PHP 8.1 ou superior
+- PDO
+- `pdo_sqlite`
+- `fileinfo`
+- `openssl`
+- `mbstring`
+- `json`
 
-```bash
-cd ~/totem_autoatendimento_v3
-chmod +x PROJETO_PHP/tools/instalar_xampp_ubuntu.sh
-PROJETO_PHP/tools/instalar_xampp_ubuntu.sh
-```
+O QR Code é gerado em PHP puro dentro de `app/qrcode.php`; não precisa instalar binário externo ou biblioteca via Composer.
 
-O script cria um link em `/opt/lampp/htdocs/totem_v3`, prepara permissões e valida a sintaxe PHP.
+## Dependências opcionais
 
-Manual:
+O sistema continua funcionando sem estes componentes:
 
-```bash
-sudo ln -s /home/luisnasc/totem_autoatendimento_v3/PROJETO_PHP /opt/lampp/htdocs/totem_v3
-sudo chown -R "$USER":daemon PROJETO_PHP/data PROJETO_PHP/uploads PROJETO_PHP/branding
-sudo chmod -R 775 PROJETO_PHP/data PROJETO_PHP/uploads PROJETO_PHP/branding
-```
+- Tesseract + Poppler: validação OCR avançada de CNH/RG/CIN;
+- PC/SC: ACR122U real;
+- SiTef/TEF: Gertec real;
+- driver/bridge da impressora térmica.
 
-Acesse primeiro:
+Sem esses componentes, os respectivos módulos permanecem em modo básico/mock. Eles não impedem check-in, check-out, reservas, dashboard, QR, upload, configurações ou banco.
+
+## Instalação mais simples
+
+Copie **todo o conteúdo de `PROJETO_PHP`** para uma pasta dentro de `htdocs`.
+
+### Windows / XAMPP padrão
+
+Exemplo:
 
 ```text
-http://IP_DO_SERVIDOR/totem_v3/diagnostico.php
+C:\xampp\htdocs\totem\
+    index.php
+    install.php
+    api.php
+    reservas.php
+    portaria.php
+    upload.php
+    app\
+    assets\
+    config\
+    database\
+    data\
+    uploads\
+    branding\
+```
+
+Inicie o Apache no XAMPP Control Panel e abra:
+
+```text
+http://localhost/totem/install.php
 ```
 
 Depois:
 
 ```text
-http://IP_DO_SERVIDOR/totem_v3/
-http://IP_DO_SERVIDOR/totem_v3/reservas.php
+http://localhost/totem/
+http://localhost/totem/reservas.php
+http://localhost/totem/diagnostico.php
 ```
 
-A senha administrativa inicial é `251933`.
+### Linux / XAMPP padrão
 
-## Banco de dados
-
-`data/totem.sqlite` é criado automaticamente na primeira execução. O schema inclui reservas, hóspedes, documentos, extrato, pagamentos, pulseiras, gov.br, metadados administrativos, autorizações de saída e auditoria.
-
-O banco novo inclui as reservas de demonstração:
-
-- `RES-10025` — check-out
-- `RES-20080` — check-in
-
-### Preservar o banco da V2
-
-Pare o processo que estiver escrevendo no SQLite e execute:
+Exemplo:
 
 ```bash
-cd ~/totem_autoatendimento_v3/PROJETO_PHP
-/opt/lampp/bin/php tools/migrar_banco_v2.php /caminho/da/v2/data/totem.sqlite 251933
+sudo mkdir -p /opt/lampp/htdocs/totem
+sudo rsync -a PROJETO_PHP/ /opt/lampp/htdocs/totem/
+sudo /opt/lampp/lampp startapache
 ```
 
-O script cria backup, converte o hash administrativo scrypt/Node para `password_hash()` do PHP e adiciona as tabelas/metadados novos.
-
-## QR Codes
-
-Instale `qrencode`:
-
-```bash
-sudo apt update
-sudo apt install -y qrencode
-```
-
-Sem ele o sistema continua exibindo as URLs, mas não gera o PNG do QR Code.
-
-## Validação de documentos
-
-A V3 PHP porta a regra local da V2. Para CNH/RG/CIN:
-
-- aceita PDF, JPG, PNG e WEBP, até 15 MB;
-- PDF: renderiza até 3 páginas com Poppler a 220 dpi;
-- OCR local com Tesseract `por+eng`;
-- exige marcadores de documento de identidade;
-- exige CPF matematicamente válido;
-- conteúdo aleatório que apenas contenha um CPF é rejeitado;
-- texto OCR e CPF extraído não são persistidos.
-
-Instale no Ubuntu:
-
-```bash
-sudo apt install -y tesseract-ocr tesseract-ocr-por tesseract-ocr-eng poppler-utils
-```
-
-Se Tesseract não estiver instalado, o sistema mantém o upload em modo básico para não travar a implantação, e `diagnostico.php` deve ser usado para detectar essa situação antes de produção.
-
-## Hardware
-
-Modos preservados nas configurações:
-
-- NFC `mock` / `pcsc`
-- Impressora `mock` / `escpos`
-- Pagamento `mock` / `sitef`
-- Webcam via `getUserMedia`
-
-O fluxo visual está funcional em mock. Produção ainda depende dos adapters homologados:
-
-- ACS ACR122U → bridge PC/SC local
-- Gertec PPC930 → TEF/SiTef homologado
-- POS 80 mm → `printer_mode=escpos`, dispositivo padrão `/dev/usb/lp0`
-
-## TOTVS
-
-O dashboard diferencia `manual`, `demo` e `integration`. Os campos `api_provider`, `totvs_base_url`, `totvs_token` e `external_id` foram mantidos. A sincronização real depende do Swagger/endpoints/credenciais da Guest API contratada; por isso o adapter real não inventa endpoints.
-
-Reservas manuais continuam disponíveis no totem independentemente do provider.
-
-## HTTPS sem alerta de certificado
-
-Use um domínio/subdomínio real com certificado público Let's Encrypt no Apache, por exemplo:
+Abra:
 
 ```text
-https://totem.seudominio.com.br/
+http://IP_DO_SERVIDOR/totem/install.php
 ```
 
-Assim o navegador e o celular não exibem o aviso de certificado e a webcam funciona em contexto seguro. Não é necessário Caddy nem portas Node.
+Também existe `tools/instalar_xampp_ubuntu.sh` para automatizar a primeira cópia.
 
-## Segurança
+## Primeiro acesso
 
-O `.htaccess` bloqueia acesso HTTP direto a `app`, `config`, `database`, `data`, `uploads` e `branding`. Mantenha `AllowOverride All` habilitado para esse diretório no Apache.
+`install.php`:
 
-## Validação rápida
+1. verifica PHP e extensões obrigatórias;
+2. cria `data`, `uploads` e `branding` se necessário;
+3. cria automaticamente `data/totem.sqlite`;
+4. aplica `database/schema.sql`;
+5. cria as reservas de demonstração se o banco estiver vazio;
+6. grava nome do hotel;
+7. grava a URL pública usada nos QR Codes;
+8. configura a senha administrativa.
+
+Senha inicial padrão, se nenhuma for informada:
+
+```text
+251933
+```
+
+Depois use `diagnostico.php` para validar a instalação.
+
+## Banco
+
+O banco padrão é:
+
+```text
+data/totem.sqlite
+```
+
+SQLite foi escolhido para a instalação XAMPP porque não exige criação manual de base, usuário ou senha. O PHP abre o banco em WAL e cria o schema automaticamente.
+
+O banco contém:
+
+- reservas;
+- hóspedes;
+- documentos;
+- estado gov.br/facial;
+- pulseiras;
+- pagamentos;
+- extrato;
+- autorizações de saída;
+- metadados de integração/manual/demo;
+- auditoria;
+- configurações do dispositivo.
+
+Reservas de demonstração do banco novo:
+
+- `RES-10025` — fluxo de check-out;
+- `RES-20080` — fluxo de check-in.
+
+## Dashboard de reservas
+
+```text
+/reservas.php
+```
+
+Permite acompanhar reservas integradas/manuais/demo, pesquisar, filtrar, criar reserva manual para completar no totem, editar e preparar novamente uma reserva para testes.
+
+A reserva manual entra no mesmo SQLite e no mesmo lookup do totem.
+
+## QR Code sem dependência externa
+
+`app/qrcode.php` gera QR Code Model 2 em SVG localmente. O sistema usa o QR para:
+
+- upload de documentos pelo celular;
+- autorização de saída;
+- endpoints internos que precisem de QR.
+
+Não é necessário instalar `qrencode`, GD ou Composer.
+
+## Upload de documentos
+
+Formatos aceitos:
+
+- PDF
+- JPG/JPEG
+- PNG
+- WEBP
+
+Limite do sistema: 15 MB.
+
+O `diagnostico.php` também verifica `upload_max_filesize` e `post_max_size` do PHP. Se o XAMPP estiver com limite menor, ajuste no `php.ini` e reinicie o Apache.
+
+### OCR opcional
+
+Se Tesseract estiver disponível, a validação avançada de documento é ativada automaticamente. Para PDF, Poppler/pdftoppm também é usado.
+
+Se eles não estiverem instalados, a aplicação não falha: o upload entra em modo básico.
+
+## Câmera e leitores de QR
+
+A webcam é acessada pelo navegador através de `navigator.mediaDevices.getUserMedia()`.
+
+- `http://localhost/...` é aceito pelos navegadores como contexto seguro para câmera;
+- acesso por outro computador/tablet usando `http://IP/...` normalmente bloqueia câmera;
+- para tablets e outros dispositivos, use HTTPS no próprio Apache/XAMPP.
+
+Em Configurações existe seleção persistente da câmera padrão de QR pelo `deviceId`. O valor fica salvo no SQLite.
+
+## Teclado virtual
+
+Em Regras do fluxo existe o toggle para habilitar/desabilitar o teclado virtual da V2.
+
+- ligado: usa o teclado onscreen do projeto;
+- desligado: não abre o teclado do projeto e deixa o equipamento/tablet usar seu teclado nativo.
+
+Segurar a engrenagem por aproximadamente 3 segundos alterna fullscreen quando o navegador permite a Fullscreen API.
+
+## HTTPS
+
+Não é necessário Caddy ou NGINX. O próprio Apache do XAMPP pode atender HTTPS.
+
+Para não aparecer aviso de certificado em tablets/celulares, use um domínio real e um certificado confiável. Isso é requisito do navegador/certificado, não do backend PHP.
+
+## `.htaccess`
+
+O arquivo incluído:
+
+- desativa listagem de diretórios;
+- define `index.php` como entrada;
+- bloqueia acesso HTTP direto às pastas internas e ao SQLite;
+- configura headers básicos e permissão de câmera para a própria origem.
+
+No Apache, `AllowOverride` precisa permitir o `.htaccess`. XAMPP normalmente já vem preparado para isso.
+
+## Atualização sem perder banco
+
+Ao atualizar uma instalação já em uso, preserve:
+
+```text
+data/
+uploads/
+branding/
+```
+
+Não substitua `data/totem.sqlite` por um banco vazio.
+
+## Migração da V2
+
+Ferramenta disponível:
 
 ```bash
-cd ~/totem_autoatendimento_v3/PROJETO_PHP
+php tools/migrar_banco_v2.php /caminho/v2/data/totem.sqlite 251933
+```
+
+Ela copia o banco da V2 e adapta a autenticação administrativa para o PHP.
+
+## Teste pelo terminal
+
+No Linux XAMPP:
+
+```bash
+cd /opt/lampp/htdocs/totem
 find . -name '*.php' -print0 | xargs -0 -n1 /opt/lampp/bin/php -l
 /opt/lampp/bin/php tools/smoke.php
 ```
 
-Depois abra `diagnostico.php`.
+No Windows, use o PHP do XAMPP:
+
+```bat
+cd C:\xampp\htdocs\totem
+C:\xampp\php\php.exe tools\smoke.php
+```
+
+O teste verifica SQLite, reservas demo, dashboard, assinatura de saída, preferências do dispositivo e geração de QR sem dependências externas.
+
+## Integrações reais
+
+A aplicação principal permanece XAMPP. Somente os equipamentos/serviços contratados precisam de seus adapters:
+
+- TOTVS: endpoints e credenciais reais da Guest API;
+- ACR122U: PC/SC;
+- Gertec PPC930: SiTef/TEF homologado;
+- impressora: driver/bridge compatível com o sistema operacional.
+
+Esses adapters não mudam o frontend nem a estrutura de campos.
