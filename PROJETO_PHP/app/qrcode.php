@@ -5,7 +5,7 @@ declare(strict_types=1);
  * Gerador QR Code Model 2 autocontido para a V3 XAMPP.
  * - modo Byte
  * - nível de correção L
- * - versões 1 a 6
+ * - versões 1 a 9
  * - máscara 0
  *
  * Não depende de GD, Composer, qrencode ou serviços externos.
@@ -44,9 +44,7 @@ function qr_rs_remainder(array $data, int $degree): array
         $factor = ((int)$byte) ^ $result[0];
         array_shift($result);
         $result[] = 0;
-        for ($i = 0; $i < $degree; $i++) {
-            $result[$i] ^= qr_gf_multiply($divisor[$i], $factor);
-        }
+        for ($i = 0; $i < $degree; $i++) $result[$i] ^= qr_gf_multiply($divisor[$i], $factor);
     }
     return $result;
 }
@@ -58,8 +56,7 @@ function qr_append_bits(array &$bits, int $value, int $length): void
 
 function qr_version_spec(int $byteLength): array
 {
-    // data = quantidade de codewords de dados; ecc = ECC por bloco.
-    // A versão 6-L possui dois blocos iguais de 68 codewords de dados.
+    // QR-L, versões 1-9. Versões 6-9 usam dois blocos iguais.
     $specs = [
         1 => ['data'=>19,  'ecc'=>7,  'blocks'=>1, 'centers'=>[]],
         2 => ['data'=>34,  'ecc'=>10, 'blocks'=>1, 'centers'=>[6,18]],
@@ -67,22 +64,24 @@ function qr_version_spec(int $byteLength): array
         4 => ['data'=>80,  'ecc'=>20, 'blocks'=>1, 'centers'=>[6,26]],
         5 => ['data'=>108, 'ecc'=>26, 'blocks'=>1, 'centers'=>[6,30]],
         6 => ['data'=>136, 'ecc'=>18, 'blocks'=>2, 'centers'=>[6,34]],
+        7 => ['data'=>156, 'ecc'=>20, 'blocks'=>2, 'centers'=>[6,22,38]],
+        8 => ['data'=>194, 'ecc'=>24, 'blocks'=>2, 'centers'=>[6,24,42]],
+        9 => ['data'=>232, 'ecc'=>30, 'blocks'=>2, 'centers'=>[6,26,46]],
     ];
     foreach ($specs as $version => $spec) {
-        // 4 bits modo + 8 bits tamanho + payload + terminador/alinhamento.
         $capacityBits = $spec['data'] * 8;
         $requiredBits = 4 + 8 + ($byteLength * 8);
         if ($requiredBits <= $capacityBits) return ['version'=>$version] + $spec;
     }
-    throw new InvalidArgumentException('Conteúdo grande demais para o QR local. Reduza a URL pública do totem.');
+    throw new InvalidArgumentException('Conteúdo grande demais para o QR local. Use uma URL pública mais curta.');
 }
 
 function qr_make_codewords(string $text, array $spec): array
 {
     $bytes = array_values(unpack('C*', $text) ?: []);
     $bits = [];
-    qr_append_bits($bits, 0b0100, 4); // Byte mode
-    qr_append_bits($bits, count($bytes), 8); // versões 1-9
+    qr_append_bits($bits, 0b0100, 4);
+    qr_append_bits($bits, count($bytes), 8);
     foreach ($bytes as $byte) qr_append_bits($bits, $byte, 8);
 
     $capacity = $spec['data'] * 8;
@@ -98,9 +97,7 @@ function qr_make_codewords(string $text, array $spec): array
     }
     $pads = [0xEC, 0x11];
     $p = 0;
-    while (count($data) < $spec['data']) {
-        $data[] = $pads[$p++ & 1];
-    }
+    while (count($data) < $spec['data']) $data[] = $pads[$p++ & 1];
 
     $blocks = (int)$spec['blocks'];
     if ($blocks === 1) return array_merge($data, qr_rs_remainder($data, (int)$spec['ecc']));
@@ -115,24 +112,24 @@ function qr_make_codewords(string $text, array $spec): array
     }
 
     $result = [];
-    for ($i = 0; $i < $blockSize; $i++) {
-        for ($b = 0; $b < $blocks; $b++) $result[] = $dataBlocks[$b][$i];
-    }
-    for ($i = 0; $i < (int)$spec['ecc']; $i++) {
-        for ($b = 0; $b < $blocks; $b++) $result[] = $eccBlocks[$b][$i];
-    }
+    for ($i = 0; $i < $blockSize; $i++) for ($b = 0; $b < $blocks; $b++) $result[] = $dataBlocks[$b][$i];
+    for ($i = 0; $i < (int)$spec['ecc']; $i++) for ($b = 0; $b < $blocks; $b++) $result[] = $eccBlocks[$b][$i];
     return $result;
 }
 
 function qr_bch_format(int $mask): int
 {
-    // L = 01. Os 5 bits são EC(2) + máscara(3).
-    $data = (0b01 << 3) | ($mask & 7);
+    $data = (0b01 << 3) | ($mask & 7); // L=01
     $rem = $data << 10;
-    for ($i = 14; $i >= 10; $i--) {
-        if ((($rem >> $i) & 1) !== 0) $rem ^= 0x537 << ($i - 10);
-    }
+    for ($i = 14; $i >= 10; $i--) if ((($rem >> $i) & 1) !== 0) $rem ^= 0x537 << ($i - 10);
     return (($data << 10) | ($rem & 0x3FF)) ^ 0x5412;
+}
+
+function qr_bch_version(int $version): int
+{
+    $rem = $version << 12;
+    for ($i = 17; $i >= 12; $i--) if ((($rem >> $i) & 1) !== 0) $rem ^= 0x1F25 << ($i - 12);
+    return ($version << 12) | ($rem & 0xFFF);
 }
 
 function qr_set_function(array &$m, array &$f, int $x, int $y, bool $dark): void
@@ -145,21 +142,17 @@ function qr_set_function(array &$m, array &$f, int $x, int $y, bool $dark): void
 
 function qr_draw_finder(array &$m, array &$f, int $cx, int $cy): void
 {
-    for ($dy = -4; $dy <= 4; $dy++) {
-        for ($dx = -4; $dx <= 4; $dx++) {
-            $dist = max(abs($dx), abs($dy));
-            qr_set_function($m, $f, $cx + $dx, $cy + $dy, $dist !== 2 && $dist !== 4);
-        }
+    for ($dy = -4; $dy <= 4; $dy++) for ($dx = -4; $dx <= 4; $dx++) {
+        $dist = max(abs($dx), abs($dy));
+        qr_set_function($m, $f, $cx + $dx, $cy + $dy, $dist !== 2 && $dist !== 4);
     }
 }
 
 function qr_draw_alignment(array &$m, array &$f, int $cx, int $cy): void
 {
     if ($f[$cy][$cx]) return;
-    for ($dy = -2; $dy <= 2; $dy++) {
-        for ($dx = -2; $dx <= 2; $dx++) {
-            qr_set_function($m, $f, $cx + $dx, $cy + $dy, max(abs($dx), abs($dy)) !== 1);
-        }
+    for ($dy = -2; $dy <= 2; $dy++) for ($dx = -2; $dx <= 2; $dx++) {
+        qr_set_function($m, $f, $cx + $dx, $cy + $dy, max(abs($dx), abs($dy)) !== 1);
     }
 }
 
@@ -174,10 +167,23 @@ function qr_draw_format(array &$m, array &$f, int $mask): void
     qr_set_function($m, $f, 8, 8, $bit(7));
     qr_set_function($m, $f, 7, 8, $bit(8));
     for ($i = 9; $i < 15; $i++) qr_set_function($m, $f, 14 - $i, 8, $bit($i));
-
     for ($i = 0; $i < 8; $i++) qr_set_function($m, $f, $size - 1 - $i, 8, $bit($i));
     for ($i = 8; $i < 15; $i++) qr_set_function($m, $f, 8, $size - 15 + $i, $bit($i));
-    qr_set_function($m, $f, 8, $size - 8, true); // dark module
+    qr_set_function($m, $f, 8, $size - 8, true);
+}
+
+function qr_draw_version(array &$m, array &$f, int $version): void
+{
+    if ($version < 7) return;
+    $size = count($m);
+    $bits = qr_bch_version($version);
+    for ($i = 0; $i < 18; $i++) {
+        $dark = (($bits >> $i) & 1) !== 0;
+        $a = $size - 11 + ($i % 3);
+        $b = intdiv($i, 3);
+        qr_set_function($m, $f, $a, $b, $dark);
+        qr_set_function($m, $f, $b, $a, $dark);
+    }
 }
 
 function qr_matrix(string $text): array
@@ -192,17 +198,15 @@ function qr_matrix(string $text): array
     qr_draw_finder($m, $f, 3, 3);
     qr_draw_finder($m, $f, $size - 4, 3);
     qr_draw_finder($m, $f, 3, $size - 4);
-
-    foreach ($spec['centers'] as $cy) {
-        foreach ($spec['centers'] as $cx) qr_draw_alignment($m, $f, $cx, $cy);
-    }
+    foreach ($spec['centers'] as $cy) foreach ($spec['centers'] as $cx) qr_draw_alignment($m, $f, $cx, $cy);
 
     for ($i = 0; $i < $size; $i++) {
         if (!$f[6][$i]) qr_set_function($m, $f, $i, 6, ($i % 2) === 0);
         if (!$f[$i][6]) qr_set_function($m, $f, 6, $i, ($i % 2) === 0);
     }
 
-    qr_draw_format($m, $f, 0); // também reserva os módulos de formato
+    qr_draw_format($m, $f, 0);
+    qr_draw_version($m, $f, $version);
 
     $codewords = qr_make_codewords($text, $spec);
     $bits = [];
@@ -217,15 +221,15 @@ function qr_matrix(string $text): array
                 $x = $right - $j;
                 if ($f[$y][$x]) continue;
                 $dark = ($bits[$bitIndex++] ?? 0) !== 0;
-                if ((($x + $y) & 1) === 0) $dark = !$dark; // máscara 0
+                if ((($x + $y) & 1) === 0) $dark = !$dark;
                 $m[$y][$x] = $dark;
             }
         }
         $upward = !$upward;
     }
 
-    // Formato deve ficar sem máscara de dados.
     qr_draw_format($m, $f, 0);
+    qr_draw_version($m, $f, $version);
     return $m;
 }
 
