@@ -74,6 +74,22 @@
     });
   };
 
+  function markLocalPreferences(){
+    const card=document.getElementById('devicePreferencesCard');
+    if(!card || card.querySelector('[data-local-device-note]'))return;
+    const note=document.createElement('div');
+    note.dataset.localDeviceNote='1';
+    note.style.cssText='margin:-4px 0 14px;color:var(--kiosk-muted);font-size:.86rem;line-height:1.35';
+    note.textContent='Estas preferências são salvas somente neste navegador/equipamento e não alteram outros totens, tablets ou celulares.';
+    const title=card.querySelector('h3');
+    if(title)title.insertAdjacentElement('afterend',note);else card.prepend(note);
+  }
+
+  const modalRoot=document.getElementById('modalRoot');
+  if(modalRoot){
+    new MutationObserver(()=>queueMicrotask(markLocalPreferences)).observe(modalRoot,{childList:true,subtree:true});
+  }
+
   window.TotemLocalDevicePreferences={
     storageKey:STORAGE_KEY,
     read,
