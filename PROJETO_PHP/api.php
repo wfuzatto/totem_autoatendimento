@@ -10,7 +10,7 @@ $data = request_data();
 try {
     switch ($action) {
         case 'health':
-            json_response(['ok'=>true,'service'=>'totem-autoatendimento-php','version'=>'3','time'=>date('c')]);
+            json_response(['ok'=>true,'service'=>'totem-autoatendimento-php','version'=>'3-xampp','runtime'=>'php-apache','time'=>date('c')]);
 
         case 'config':
             json_response([
@@ -145,7 +145,12 @@ try {
             $key=(string)($_GET['key']??'');if(!in_array($key,['logo_filename','checkout_ad_filename','govbr_qr_filename'],true)){http_response_code(404);exit;}$file=branding_file($key);if(!$file){http_response_code(404);exit;}$mime=(new finfo(FILEINFO_MIME_TYPE))->file($file)?:'application/octet-stream';header('Content-Type: '.$mime);header('Cache-Control: no-store');readfile($file);exit;
 
         case 'qr_image':
-            $text=(string)($_GET['text']??'');$dataUrl=qr_data_url($text);if(!$dataUrl)json_response(['error'=>'qrencode não está instalado no servidor.','text'=>$text],503);[$head,$body]=explode(',',$dataUrl,2);header('Content-Type: image/png');header('Cache-Control: no-store');echo base64_decode($body);exit;
+            $text=(string)($_GET['text']??'');
+            if($text==='')json_response(['error'=>'Informe o conteúdo do QR Code.'],400);
+            header('Content-Type: image/svg+xml; charset=utf-8');
+            header('Cache-Control: no-store');
+            echo qr_svg($text);
+            exit;
 
         case 'totvs_sync':
             require_admin();json_response(['error'=>'Adapter TOTVS preservado para a próxima etapa. Informe Swagger/endpoints e credenciais reais para ativar sincronização.'],501);
