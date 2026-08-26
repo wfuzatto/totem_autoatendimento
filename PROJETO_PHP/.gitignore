@@ -1,0 +1,6 @@
+data/*
+!data/.gitkeep
+uploads/*
+!uploads/.gitkeep
+branding/*
+!branding/.gitkeep
