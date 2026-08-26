@@ -54,14 +54,25 @@
     },wait);
   }
 
+  function clearLookupErrorState(){
+    document.body.classList.remove('totem-lookup-error-active');
+    if(toast){
+      toast.classList.add('hidden');
+      toast.textContent='';
+    }
+  }
+
   function showError(message='Reserva não encontrada'){
-    skipGenericUntil=performance.now()+1800;
+    skipGenericUntil=performance.now()+3200;
+    document.body.classList.add('totem-lookup-error-active');
     show(message,{kind:'error',minimum:0});
     clearTimeout(hideTimer);
     hideTimer=setTimeout(()=>{
       ensureOverlay().classList.add('hidden');
+      ensureOverlay().dataset.kind='';
       activeKind='';
-    },2200);
+      clearLookupErrorState();
+    },2500);
   }
 
   function isLookupRequest(input){
@@ -76,18 +87,28 @@
   window.fetch=async function(input,init){
     const lookup=isLookupRequest(input);
     if(lookup){
-      skipGenericUntil=performance.now()+1200;
+      clearLookupErrorState();
+      skipGenericUntil=performance.now()+1800;
       show('Executando busca',{kind:'loading',minimum:650});
     }
+
     try{
       const response=await previousFetch(input,init);
       if(lookup){
-        if(response.ok)hide({delay:280});
-        else hide({minimum:400});
+        if(response.ok){
+          hide({delay:280});
+        }else if(response.status===404){
+          showError('Reserva não encontrada');
+        }else{
+          hide({minimum:400});
+        }
       }
       return response;
     }catch(error){
-      if(lookup)hide({minimum:400});
+      if(lookup){
+        clearLookupErrorState();
+        hide({minimum:400});
+      }
       throw error;
     }
   };
@@ -108,7 +129,8 @@
     }
 
     if(isSpecificLookupButton(button)){
-      skipGenericUntil=performance.now()+1200;
+      clearLookupErrorState();
+      skipGenericUntil=performance.now()+1600;
       show('Executando busca',{kind:'loading',minimum:650});
       return;
     }
@@ -134,15 +156,9 @@
     observer.observe(app,{childList:true,subtree:false});
   }
 
-  if(toast){
-    const suppressReservationNotFound=()=>{
-      const text=(toast.textContent||'').trim();
-      if(!/reserva não encontrada/i.test(text))return;
-      toast.classList.add('hidden');
-      showError('Reserva não encontrada');
-    };
-    new MutationObserver(suppressReservationNotFound).observe(toast,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['class']});
-  }
+  window.addEventListener('pageshow',()=>{
+    if(activeKind!=='error')clearLookupErrorState();
+  });
 
   window.TotemTransitionLoading={show,hide,error:showError};
 })();
