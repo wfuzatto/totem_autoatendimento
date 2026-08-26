@@ -10,7 +10,7 @@ $logo = htmlspecialchars(branding_url('logo_filename') ?: app_url('assets/logo.p
   <meta name="theme-color" content="#006b3c">
   <title><?= $hotel ?> · Autoatendimento</title>
   <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/v2-restored.css')) ?>?v=8">
-  <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/v2-restored-fixes.css')) ?>?v=8">
+  <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/v2-restored-fixes.css')) ?>?v=9">
 </head>
 <body data-skin="vale_mantiqueira">
   <header class="kiosk-header">
@@ -50,5 +50,6 @@ $logo = htmlspecialchars(branding_url('logo_filename') ?: app_url('assets/logo.p
   <script src="<?= htmlspecialchars(app_url('assets/v2-restored-keyboard.js')) ?>?v=8"></script>
   <script src="<?= htmlspecialchars(app_url('assets/device-preferences.js')) ?>?v=8"></script>
   <script src="<?= htmlspecialchars(app_url('assets/v2-restored-kiosk.js')) ?>?v=8"></script>
+  <script src="<?= htmlspecialchars(app_url('assets/v2-home-icons.js')) ?>?v=9"></script>
 </body>
 </html>
