@@ -2,21 +2,27 @@
 require __DIR__ . '/app/core.php';
 $hotel = htmlspecialchars((string)setting('hotel_name', cfg('hotel_name')), ENT_QUOTES, 'UTF-8');
 $logo = htmlspecialchars(branding_url('logo_filename') ?: app_url('assets/logo.php'), ENT_QUOTES, 'UTF-8');
+$skinRaw = (string)setting('theme_skin', 'vale_mantiqueira');
+$skin = in_array($skinRaw, ['vale_mantiqueira','neutral'], true) ? $skinRaw : 'vale_mantiqueira';
+$themeColor = $skin === 'neutral' ? '#0d6efd' : '#006b3c';
 ?><!doctype html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <meta name="theme-color" content="#006b3c">
+  <meta name="theme-color" content="<?= $themeColor ?>">
   <title><?= $hotel ?> · Autoatendimento</title>
   <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/v2-restored.css')) ?>?v=8">
-  <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/v2-restored-fixes.css')) ?>?v=10">
+  <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/v2-restored-fixes.css')) ?>?v=13">
 </head>
-<body data-skin="vale_mantiqueira">
+<body data-skin="<?= htmlspecialchars($skin, ENT_QUOTES, 'UTF-8') ?>">
   <header class="kiosk-header">
     <div class="brand-wrap">
       <div class="brand-logo-frame" aria-label="<?= $hotel ?>">
         <img id="brandLogo" class="brand-logo" src="<?= $logo ?>" alt="<?= $hotel ?>">
+      </div>
+      <div class="generic-brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 16 16" fill="currentColor"><path d="M12.5 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7m1.679-4.493-1.335 2.226a.75.75 0 0 1-1.174.144l-.774-.773a.5.5 0 0 1 .708-.708l.547.548 1.17-1.951a.5.5 0 1 1 .858.514"/><path d="M2 1a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6.5a.5.5 0 0 1-1 0V1H3v14h3v-2.5a.5.5 0 0 1 .5-.5H8v4H3a1 1 0 0 1-1-1z"/><path d="M4.5 2a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5zm3 0a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5zm3 0a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5zm-6 3a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5zm3 0a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5zm3 0a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5zm-6 3a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5zm3 0a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h1a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5z"/></svg>
       </div>
       <div class="brand-copy">
         <div class="brand-name" id="hotelName"><?= $hotel ?></div>
@@ -58,6 +64,7 @@ $logo = htmlspecialchars(branding_url('logo_filename') ?: app_url('assets/logo.p
   <script src="<?= htmlspecialchars(app_url('assets/device-preferences.js')) ?>?v=12"></script>
   <script src="<?= htmlspecialchars(app_url('assets/v2-restored-kiosk.js')) ?>?v=8"></script>
   <script src="<?= htmlspecialchars(app_url('assets/v2-home-icons.js')) ?>?v=9"></script>
+  <script src="<?= htmlspecialchars(app_url('assets/v2-admin-visuals.js')) ?>?v=13"></script>
   <script src="<?= htmlspecialchars(app_url('assets/settings-always-auth.js')) ?>?v=11"></script>
 </body>
 </html>
