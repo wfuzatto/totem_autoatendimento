@@ -13,7 +13,7 @@ $themeColor = $skin === 'neutral' ? '#0d6efd' : '#006b3c';
   <meta name="theme-color" content="<?= $themeColor ?>">
   <title><?= $hotel ?> · Autoatendimento</title>
   <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/v2-restored.css')) ?>?v=8">
-  <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/v2-restored-fixes.css')) ?>?v=13">
+  <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/v2-restored-fixes.css')) ?>?v=14">
 </head>
 <body data-skin="<?= htmlspecialchars($skin, ENT_QUOTES, 'UTF-8') ?>">
   <header class="kiosk-header">
@@ -63,6 +63,7 @@ $themeColor = $skin === 'neutral' ? '#0d6efd' : '#006b3c';
   <script src="<?= htmlspecialchars(app_url('assets/local-device-storage.js')) ?>?v=12"></script>
   <script src="<?= htmlspecialchars(app_url('assets/device-preferences.js')) ?>?v=12"></script>
   <script src="<?= htmlspecialchars(app_url('assets/v2-restored-kiosk.js')) ?>?v=8"></script>
+  <script src="<?= htmlspecialchars(app_url('assets/transition-loading.js')) ?>?v=14"></script>
   <script src="<?= htmlspecialchars(app_url('assets/v2-home-icons.js')) ?>?v=9"></script>
   <script src="<?= htmlspecialchars(app_url('assets/v2-admin-visuals.js')) ?>?v=13"></script>
   <script src="<?= htmlspecialchars(app_url('assets/settings-always-auth.js')) ?>?v=11"></script>
