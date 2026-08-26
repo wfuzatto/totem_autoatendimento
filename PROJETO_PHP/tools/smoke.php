@@ -29,9 +29,19 @@ $check('Dashboard de reservas', function() use ($assert) {
     $list = list_reservations([]);
     $assert(isset($list['rows'],$list['stats']) && count($list['rows']) >= 2, 'Listagem incompleta');
 });
-$check('Assinatura de autorização', function() use ($assert) {
+$check('Assinatura compacta de autorização', function() use ($assert) {
     $sig = sign_exit_token('teste', 123456);
-    $assert(strlen($sig) === 64, 'HMAC inválido');
+    $assert(strlen($sig) === 32, 'HMAC compacto inválido');
+});
+$check('QR Code local sem qrencode', function() use ($assert) {
+    $data = qr_data_url('https://localhost/totem/upload.php?token=0123456789abcdef0123456789abcdef');
+    $assert(is_string($data) && str_starts_with($data, 'data:image/svg+xml;base64,'), 'QR local não gerado');
+    $svg = base64_decode(substr($data, strlen('data:image/svg+xml;base64,')), true);
+    $assert(is_string($svg) && str_contains($svg, '<svg'), 'SVG QR inválido');
+});
+$check('Preferências do dispositivo existem', function() use ($assert) {
+    $assert(setting('onscreen_keyboard_enabled', null) !== null, 'toggle do teclado ausente');
+    $assert(setting('qr_camera_device_id', null) !== null, 'configuração de câmera ausente');
 });
 
 $failed = 0;
