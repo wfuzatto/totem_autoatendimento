@@ -1,0 +1,2 @@
+/* Lookup errors are rendered in the centered transition overlay. Prevent the legacy corner toast from duplicating the message. */
+body.totem-lookup-error-active #toast{display:none!important}
