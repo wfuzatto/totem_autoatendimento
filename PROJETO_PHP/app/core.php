@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/qrcode.php';
 
 function cfg(?string $key = null): mixed
 {
@@ -53,6 +54,8 @@ function seed_defaults(PDO $pdo): void
         'require_face_match' => '1',
         'require_wristband_return' => '1',
         'enable_accessibility_toolbar' => '1',
+        'onscreen_keyboard_enabled' => '1',
+        'qr_camera_device_id' => '',
         'api_provider' => 'mock',
         'totvs_base_url' => '',
         'totvs_token' => '',
@@ -383,7 +386,7 @@ function delete_manual_reservation(int $id): bool
 
 function create_upload_token(int $reservationId): array
 {
-    if(!reservation_bundle($reservationId))throw new RuntimeException('Reserva não encontrada.');$token=bin2hex(random_bytes(24));$expires=date('c',time()+1800);
+    if(!reservation_bundle($reservationId))throw new RuntimeException('Reserva não encontrada.');$token=bin2hex(random_bytes(16));$expires=date('c',time()+1800);
     db()->prepare('DELETE FROM upload_tokens WHERE reservation_id=?')->execute([$reservationId]);db()->prepare('INSERT INTO upload_tokens(token,reservation_id,expires_at) VALUES(?,?,?)')->execute([$token,$reservationId,$expires]);
     $url=absolute_app_url('upload.php?token='.rawurlencode($token));return ['token'=>$token,'expires_at'=>$expires,'url'=>$url,'qr_data_url'=>qr_data_url($url)];
 }
@@ -395,8 +398,8 @@ function valid_upload_token(string $token): ?array
 
 function qr_data_url(string $text): ?string
 {
-    $binary=trim((string)@shell_exec('command -v qrencode 2>/dev/null'));if($binary==='')return null;
-    $cmd=escapeshellcmd($binary).' -t PNG -o - -s 7 -m 2 '.escapeshellarg($text).' 2>/dev/null';$png=@shell_exec($cmd);if(!$png)return null;return 'data:image/png;base64,'.base64_encode($png);
+    try { return qr_data_url_local($text); }
+    catch (Throwable $e) { error_log('[TOTEM QR] '.$e->getMessage()); return null; }
 }
 
 function document_upload(string $token,int $documentId,array $file): array
@@ -462,10 +465,10 @@ function return_wristband(int $id,string $code): array
 }
 function wristband_return_status(int $id): array { $s=db()->prepare('SELECT adults FROM reservations WHERE id=?');$s->execute([$id]);$expected=(int)$s->fetchColumn();$s=db()->prepare('SELECT code,returned_at FROM wristband_returns WHERE reservation_id=? ORDER BY id');$s->execute([$id]);$rows=$s->fetchAll();return ['expected'=>$expected,'returned_count'=>count($rows),'returned'=>$rows,'complete'=>count($rows)>=$expected]; }
 
-function sign_exit_token(string $tokenId,int $expires): string { return hash_hmac('sha256',$tokenId.'.'.$expires,(string)cfg('exit_token_secret')); }
+function sign_exit_token(string $tokenId,int $expires): string { return substr(hash_hmac('sha256',$tokenId.'.'.$expires,(string)cfg('exit_token_secret')),0,32); }
 function create_exit_authorization(int $reservationId): array
 {
-    $tokenId=bin2hex(random_bytes(16));$expires=time()+8*3600;$sig=sign_exit_token($tokenId,$expires);$token=$tokenId.'.'.$expires.'.'.$sig;$receipt='SAI-'.date('Ymd').'-'.str_pad((string)$reservationId,6,'0',STR_PAD_LEFT).'-'.strtoupper(substr(bin2hex(random_bytes(3)),0,6));
+    $tokenId=bin2hex(random_bytes(12));$expires=time()+8*3600;$sig=sign_exit_token($tokenId,$expires);$token=$tokenId.'.'.$expires.'.'.$sig;$receipt='SAI-'.date('Ymd').'-'.str_pad((string)$reservationId,6,'0',STR_PAD_LEFT).'-'.strtoupper(substr(bin2hex(random_bytes(3)),0,6));
     db()->prepare('INSERT INTO exit_authorizations(token_id,reservation_id,receipt_number,expires_at) VALUES(?,?,?,?)')->execute([$tokenId,$reservationId,$receipt,date('c',$expires)]);$url=absolute_app_url('portaria.php?token='.rawurlencode($token));return ['token'=>$token,'receipt_number'=>$receipt,'expires_at'=>date('c',$expires),'url'=>$url,'qr_data_url'=>qr_data_url($url)];
 }
 
