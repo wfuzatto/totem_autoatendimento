@@ -10,6 +10,8 @@
   let activeKind='';
   let skipGenericUntil=0;
 
+  const loadingEnabled=()=>window.TOTEM_LOADING_ENABLED!==false;
+
   function ensureOverlay(){
     if(overlay?.isConnected)return overlay;
     overlay=document.createElement('div');
@@ -30,11 +32,20 @@
 
   function messageNode(){return ensureOverlay().querySelector('#transitionLoadingMessage')}
 
+  function forceHide(){
+    clearTimeout(hideTimer);
+    const root=ensureOverlay();
+    root.classList.add('hidden');
+    root.dataset.kind='';
+    activeKind='';
+  }
+
   function show(message,{kind='loading',minimum=MIN_LOADING_MS}={}){
+    if(kind==='loading'&&!loadingEnabled())return null;
     clearTimeout(hideTimer);
     const root=ensureOverlay();
     const node=messageNode();
-    const sameLoading=!root.classList.contains('hidden') && activeKind==='loading' && kind==='loading' && node.textContent===message;
+    const sameLoading=!root.classList.contains('hidden')&&activeKind==='loading'&&kind==='loading'&&node.textContent===message;
     if(!sameLoading)activeSince=performance.now();
     activeKind=kind;
     root.dataset.kind=kind;
@@ -45,13 +56,17 @@
   }
 
   function loadingRemaining(){
-    if(activeKind!=='loading')return 0;
+    if(activeKind!=='loading'||!loadingEnabled())return 0;
     const root=ensureOverlay();
     const required=Math.max(MIN_LOADING_MS,Number(root.dataset.minimum||MIN_LOADING_MS));
     return Math.max(0,required-(performance.now()-activeSince));
   }
 
   function hide({minimum=null,delay=0}={}){
+    if(!loadingEnabled()){
+      forceHide();
+      return;
+    }
     const root=ensureOverlay();
     if(root.classList.contains('hidden'))return;
     const configured=minimum===null?Number(root.dataset.minimum||MIN_LOADING_MS):Number(minimum||0);
@@ -59,11 +74,7 @@
     const elapsed=performance.now()-activeSince;
     const wait=Math.max(0,required-elapsed)+Math.max(0,delay);
     clearTimeout(hideTimer);
-    hideTimer=setTimeout(()=>{
-      root.classList.add('hidden');
-      root.dataset.kind='';
-      activeKind='';
-    },wait);
+    hideTimer=setTimeout(forceHide,wait);
   }
 
   function clearLookupErrorState(){
@@ -75,25 +86,20 @@
   }
 
   function showError(message='Reserva não encontrada'){
-    skipGenericUntil=performance.now()+MIN_LOADING_MS+ERROR_VISIBLE_MS+800;
+    const wait=loadingEnabled()?loadingRemaining():0;
+    skipGenericUntil=performance.now()+wait+ERROR_VISIBLE_MS+800;
     document.body.classList.add('totem-lookup-error-active');
     if(toast){
       toast.classList.add('hidden');
       toast.textContent='';
     }
 
-    // A mensagem de erro só pode substituir o loading depois que o loading
-    // completar os 3 segundos mínimos solicitados.
-    const wait=loadingRemaining();
     clearTimeout(hideTimer);
     hideTimer=setTimeout(()=>{
       show(message,{kind:'error',minimum:0});
       clearTimeout(hideTimer);
       hideTimer=setTimeout(()=>{
-        const root=ensureOverlay();
-        root.classList.add('hidden');
-        root.dataset.kind='';
-        activeKind='';
+        forceHide();
         clearLookupErrorState();
       },ERROR_VISIBLE_MS);
     },wait);
@@ -104,7 +110,7 @@
       const raw=typeof input==='string'?input:input?.url;
       if(!raw)return false;
       const url=new URL(raw,location.href);
-      return url.pathname.endsWith('/api.php') && url.searchParams.get('action')==='lookup';
+      return url.pathname.endsWith('/api.php')&&url.searchParams.get('action')==='lookup';
     }catch(_){return false}
   }
 
@@ -112,18 +118,20 @@
     const lookup=isLookupRequest(input);
     if(lookup){
       clearLookupErrorState();
-      skipGenericUntil=performance.now()+MIN_LOADING_MS+700;
-      show('Executando busca',{kind:'loading'});
+      if(loadingEnabled()){
+        skipGenericUntil=performance.now()+MIN_LOADING_MS+700;
+        show('Executando busca',{kind:'loading'});
+      }
     }
 
     try{
       const response=await previousFetch(input,init);
       if(lookup){
         if(response.ok){
-          hide();
+          if(loadingEnabled())hide();
         }else if(response.status===404){
           showError('Reserva não encontrada');
-        }else{
+        }else if(loadingEnabled()){
           hide();
         }
       }
@@ -131,7 +139,7 @@
     }catch(error){
       if(lookup){
         clearLookupErrorState();
-        hide();
+        if(loadingEnabled())hide();
       }
       throw error;
     }
@@ -142,6 +150,7 @@
   }
 
   document.addEventListener('click',event=>{
+    if(!loadingEnabled())return;
     const button=event.target.closest('button,a');
     if(!button)return;
 
@@ -159,7 +168,7 @@
       return;
     }
 
-    if(button.closest('#app') && !button.classList.contains('payment-option') && !button.matches('#simulateNfc,#simReturn')){
+    if(button.closest('#app')&&!button.classList.contains('payment-option')&&!button.matches('#simulateNfc,#simReturn')){
       if(activeKind!=='loading'){
         skipGenericUntil=performance.now()+MIN_LOADING_MS+700;
         show('Processando',{kind:'loading'});
@@ -172,6 +181,7 @@
     let firstMutation=true;
     const observer=new MutationObserver(()=>{
       if(firstMutation){firstMutation=false;return;}
+      if(!loadingEnabled())return;
       if(performance.now()<skipGenericUntil)return;
       if(!ensureOverlay().classList.contains('hidden'))return;
       skipGenericUntil=performance.now()+MIN_LOADING_MS+700;
@@ -181,9 +191,15 @@
     observer.observe(app,{childList:true,subtree:false});
   }
 
+  window.addEventListener('totem:loading-setting-changed',event=>{
+    const enabled=event.detail?.enabled!==false;
+    window.TOTEM_LOADING_ENABLED=enabled;
+    if(!enabled&&activeKind==='loading')forceHide();
+  });
+
   window.addEventListener('pageshow',()=>{
     if(activeKind!=='error')clearLookupErrorState();
   });
 
-  window.TotemTransitionLoading={show,hide,error:showError,minimumLoadingMs:MIN_LOADING_MS};
+  window.TotemTransitionLoading={show,hide,error:showError,forceHide,minimumLoadingMs:MIN_LOADING_MS,isEnabled:loadingEnabled};
 })();
