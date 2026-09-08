@@ -1,12 +1,24 @@
-FROM node:20-bookworm-slim
+FROM node:20-bookworm-slim AS dependencies
 
-ENV NODE_ENV=production
 WORKDIR /app
+
+# Garante build reprodutível de dependências nativas como better-sqlite3
+# mesmo quando não houver binário pré-compilado para a plataforma.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY package.json ./
 RUN npm install --omit=dev --omit=optional \
     && npm cache clean --force
 
+FROM node:20-bookworm-slim AS runtime
+
+ENV NODE_ENV=production
+WORKDIR /app
+
+COPY --from=dependencies /app/node_modules ./node_modules
+COPY package.json ./
 COPY src ./src
 COPY public ./public
 
