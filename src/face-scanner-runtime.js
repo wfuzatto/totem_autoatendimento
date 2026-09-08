@@ -86,7 +86,6 @@ function installFaceScannerRuntime(app) {
         if (!guest) return res.status(404).json({ error: 'Hóspede não pertence a esta reserva.' });
 
         const form = new FormData();
-        // O nome esperado vem exclusivamente da reserva; nunca do navegador.
         form.append('expected_name', guest.name);
         form.append('reservation_id', reservation.reservation_number);
         form.append('document_type', String(req.body?.document_type || 'auto'));
@@ -117,6 +116,25 @@ function installFaceScannerRuntime(app) {
       } catch (error) {
         console.error('Face Scanner integration:', error);
         return res.status(error.statusCode || 502).json({ error: error.message || 'Falha ao consultar Face Scanner.' });
+      }
+    }
+  );
+
+  app.post(
+    '/api/face-scanner/face/preview',
+    upload.single('selfie'),
+    async (req, res) => {
+      try {
+        const selfie = req.file;
+        if (!selfie) return res.status(400).json({ error: 'Frame da câmera ausente.' });
+
+        const form = new FormData();
+        form.append('selfie', new Blob([selfie.buffer], { type: selfie.mimetype }), selfie.originalname || 'preview.jpg');
+        const result = await faceScannerPost('/api/v1/face/preview', form);
+        return res.json({ ok: true, face_scanner: result });
+      } catch (error) {
+        console.error('Face Scanner preview:', error);
+        return res.status(error.statusCode || 502).json({ error: error.message || 'Falha ao validar preview da câmera.' });
       }
     }
   );
