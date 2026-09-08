@@ -120,6 +120,30 @@ function installFaceScannerRuntime(app) {
       }
     }
   );
+
+  app.post(
+    '/api/face-scanner/face/verify',
+    upload.single('selfie'),
+    async (req, res) => {
+      try {
+        const verificationId = String(req.body?.verification_id || '').trim();
+        const selfie = req.file;
+
+        if (!verificationId) return res.status(400).json({ error: 'verification_id é obrigatório.' });
+        if (!selfie) return res.status(400).json({ error: 'Capture a foto ao vivo antes de continuar.' });
+
+        const form = new FormData();
+        form.append('verification_id', verificationId);
+        form.append('selfie', new Blob([selfie.buffer], { type: selfie.mimetype }), selfie.originalname || 'live-capture.jpg');
+
+        const result = await faceScannerPost('/api/v1/face/verify', form);
+        return res.json({ ok: true, face_scanner: result });
+      } catch (error) {
+        console.error('Face Scanner capture:', error);
+        return res.status(error.statusCode || 502).json({ error: error.message || 'Falha ao enviar captura ao Face Scanner.' });
+      }
+    }
+  );
 }
 
 module.exports = { installFaceScannerRuntime };
