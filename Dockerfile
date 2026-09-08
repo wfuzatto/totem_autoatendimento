@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS dependencies
+FROM node:22.23.2-bookworm-slim AS dependencies
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ COPY package.json ./
 RUN npm install --omit=dev --omit=optional \
     && npm cache clean --force
 
-FROM node:20-bookworm-slim AS runtime
+FROM node:22.23.2-bookworm-slim AS runtime
 
 ENV NODE_ENV=production
 WORKDIR /app

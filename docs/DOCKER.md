@@ -1,6 +1,10 @@
 # Docker
 
-O repositório agora possui imagem Docker para o **backend do Totem**. O Electron/kiosk e os periféricos físicos continuam no equipamento do Totem.
+O repositório possui imagem Docker para o **backend do Totem**. O Electron/kiosk e os periféricos físicos continuam no equipamento do Totem.
+
+## Runtime
+
+Produção usa Node.js `22.23.2` LTS. A linha Node 20 não deve ser utilizada no servidor de produção por já estar fora de suporte.
 
 ## Produção recomendada
 
