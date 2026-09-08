@@ -1,6 +1,8 @@
 let reservationBundle = null;
 let verificationId = null;
 let cameraStream = null;
+let captureInProgress = false;
+let captureGuide = null;
 
 const $ = id => document.getElementById(id);
 
@@ -32,6 +34,27 @@ async function refreshScannerStatus() {
   }
 }
 
+function setGuideVisible(visible) {
+  $('faceGuide').hidden = !visible;
+  $('captureInstruction').hidden = !visible;
+  $('captureMetrics').hidden = !visible;
+  if (!visible) $('captureCountdown').hidden = true;
+}
+
+function initCaptureGuide() {
+  if (!window.FaceCaptureGuide) return;
+  captureGuide = new window.FaceCaptureGuide({
+    video: $('video'),
+    guide: $('faceGuide'),
+    instruction: $('captureInstruction'),
+    metrics: $('captureMetrics'),
+    countdown: $('captureCountdown'),
+    previewEndpoint: '/api/face-scanner/face/preview',
+    intervalMs: 800,
+    onAutoCapture: () => captureAndSend('auto')
+  });
+}
+
 function resetFaceStep(message = 'Documento ainda não liberou a etapa de câmera.') {
   verificationId = null;
   stopCamera();
@@ -52,6 +75,9 @@ function updateSelectedGuest() {
 }
 
 function stopCamera() {
+  captureGuide?.stop();
+  setGuideVisible(false);
+  captureInProgress = false;
   if (cameraStream) {
     for (const track of cameraStream.getTracks()) track.stop();
     cameraStream = null;
@@ -81,27 +107,42 @@ async function startCamera() {
       video: {
         facingMode: 'user',
         width: { ideal: 1280 },
-        height: { ideal: 960 }
+        height: { ideal: 960 },
+        frameRate: { ideal: 30 }
       },
       audio: false
     });
     const video = $('video');
     video.srcObject = cameraStream;
+    await video.play();
     video.hidden = false;
     $('cameraPlaceholder').hidden = true;
     $('captureBtn').disabled = false;
     $('stopCameraBtn').disabled = false;
     $('startCameraBtn').disabled = true;
+    setGuideVisible(true);
+    captureGuide?.start();
     $('faceDecision').className = 'mt-4 h5 status ok';
-    $('faceDecision').textContent = 'Câmera aberta. Centralize o rosto e capture.';
+    $('faceDecision').textContent = 'Câmera aberta. Siga as instruções sobre a imagem; a captura pode ocorrer automaticamente.';
   } catch (error) {
     $('faceDecision').className = 'mt-4 h5 status bad';
     $('faceDecision').textContent = `Não foi possível abrir a câmera: ${error.message}`;
   }
 }
 
-async function captureAndSend() {
-  if (!verificationId || !cameraStream) return;
+function reviewInstruction(result) {
+  const issues = result?.quality?.issues || [];
+  if (issues.includes('nenhum_rosto_detectado')) return 'Não encontrei um rosto. Posicione-se dentro da área indicada.';
+  if (issues.includes('mais_de_um_rosto_detectado')) return 'Apenas uma pessoa deve aparecer na câmera.';
+  if (issues.includes('rosto_muito_pequeno')) return 'Aproxime um pouco o rosto da câmera.';
+  if (issues.includes('imagem_escura')) return 'Melhore a iluminação do seu rosto.';
+  if (issues.includes('imagem_clara_demais')) return 'Evite luz forte diretamente no rosto.';
+  if (issues.includes('imagem_desfocada')) return 'A imagem ficou sem nitidez. Fique parado por alguns instantes.';
+  return result?.message || 'Ajuste a posição e tente novamente.';
+}
+
+async function captureAndSend(source = 'manual') {
+  if (!verificationId || !cameraStream || captureInProgress) return;
   const video = $('video');
   if (!video.videoWidth || !video.videoHeight) {
     $('faceDecision').className = 'mt-4 h5 status warn';
@@ -109,20 +150,26 @@ async function captureAndSend() {
     return;
   }
 
+  captureInProgress = true;
+  captureGuide?.setPaused(true);
   const canvas = $('canvas');
   canvas.width = video.videoWidth;
   canvas.height = video.videoHeight;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { alpha: false });
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
   $('captureBtn').disabled = true;
   $('faceDecision').className = 'mt-4 h5 status muted';
-  $('faceDecision').textContent = 'Enviando captura ao Face Scanner…';
+  $('faceDecision').textContent = source === 'auto'
+    ? 'Captura automática realizada. Validando qualidade…'
+    : 'Enviando captura ao Face Scanner…';
   $('faceResult').textContent = 'Processando captura…';
 
-  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.92));
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.94));
   if (!blob) {
+    captureInProgress = false;
     $('captureBtn').disabled = false;
+    captureGuide?.setPaused(false);
     $('faceDecision').className = 'mt-4 h5 status bad';
     $('faceDecision').textContent = 'Falha ao gerar a imagem da câmera.';
     return;
@@ -143,16 +190,19 @@ async function captureAndSend() {
 
     if (result.status === 'review') {
       $('faceDecision').className = 'mt-4 h5 status warn';
-      $('faceDecision').textContent = `REFaça A CAPTURA · ${result.message || 'qualidade insuficiente'}`;
+      $('faceDecision').textContent = `REFAÇA A CAPTURA · ${reviewInstruction(result)}`;
       $('captureBtn').disabled = false;
+      captureGuide?.setPaused(false);
+      captureInProgress = false;
       return;
     }
 
     if (result.status === 'not_configured') {
-      $('faceDecision').className = 'mt-4 h5 status warn';
-      $('faceDecision').textContent = `CAPTURA ACEITA · qualidade ${quality.acceptable ? 'OK' : 'não confirmada'} · provider biométrico não configurado`;
+      $('faceDecision').className = 'mt-4 h5 status ok';
+      $('faceDecision').textContent = `CAPTURA ACEITA · qualidade ${quality.acceptable ? 'OK' : 'não confirmada'} · provider biométrico ainda não configurado`;
       stopCamera();
       verificationId = null;
+      captureInProgress = false;
       return;
     }
 
@@ -160,11 +210,14 @@ async function captureAndSend() {
     $('faceDecision').textContent = result.message || `Resultado: ${result.status}`;
     stopCamera();
     verificationId = null;
+    captureInProgress = false;
   } catch (error) {
     $('faceDecision').className = 'mt-4 h5 status bad';
     $('faceDecision').textContent = `Falha na captura: ${error.message}`;
     $('faceResult').textContent = error.message;
     $('captureBtn').disabled = false;
+    captureGuide?.setPaused(false);
+    captureInProgress = false;
   }
 }
 
@@ -195,7 +248,7 @@ $('lookupBtn').addEventListener('click', async () => {
 
 $('guestSelect').addEventListener('change', updateSelectedGuest);
 $('startCameraBtn').addEventListener('click', startCamera);
-$('captureBtn').addEventListener('click', captureAndSend);
+$('captureBtn').addEventListener('click', () => captureAndSend('manual'));
 $('stopCameraBtn').addEventListener('click', stopCamera);
 
 $('analyzeBtn').addEventListener('click', async () => {
@@ -260,5 +313,6 @@ $('analyzeBtn').addEventListener('click', async () => {
 });
 
 if (!window.isSecureContext) $('secureWarning').hidden = false;
+initCaptureGuide();
 window.addEventListener('beforeunload', stopCamera);
 refreshScannerStatus();
