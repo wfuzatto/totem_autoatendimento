@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Teste Face Scanner · Totem</title>
+  <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/theme.css">
+  <style>
+    body{background:#eef3f6;color:#17222d}.wrap{max-width:1180px;margin:0 auto;padding:32px 20px}.cardx{background:#fff;border:1px solid #d8e1e8;border-radius:24px;padding:28px;box-shadow:0 8px 28px #0000000a}.result{background:#0f1a24;color:#dfeaf4;border-radius:18px;padding:18px;min-height:120px;white-space:pre-wrap;overflow:auto}.status{font-weight:700}.ok{color:#198754}.warn{color:#b58100}.bad{color:#b42318}.muted{color:#607484}.step{display:inline-flex;width:52px;height:52px;border-radius:16px;align-items:center;justify-content:center;background:#113f58;color:#fff;font-weight:800;font-size:1.3rem}.guest-box{background:#f7fafc;border:1px solid #d8e1e8;border-radius:16px;padding:16px}.locked{background:#eef3f6!important}.big{font-size:1.05rem;padding:.9rem 1rem}
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <header class="d-flex justify-content-between align-items-start gap-3 mb-4">
+      <div>
+        <div class="text-uppercase fw-bold muted" style="letter-spacing:.16em">Totem Hoteleiro · Integração</div>
+        <h1 class="display-5 fw-bold mb-2">Teste Face Scanner</h1>
+        <p class="lead muted mb-0">O nome esperado vem diretamente da reserva; não pode ser digitado manualmente.</p>
+      </div>
+      <div id="scannerStatus" class="badge rounded-pill text-bg-secondary p-3">verificando Face Scanner…</div>
+    </header>
+
+    <section class="cardx mb-4">
+      <div class="d-flex gap-3 align-items-center mb-4"><span class="step">1</span><h2 class="h3 fw-bold mb-0">Selecionar reserva e hóspede</h2></div>
+      <div class="row g-3">
+        <div class="col-md-8">
+          <label class="form-label fw-bold">Número da reserva</label>
+          <input id="reservationNumber" class="form-control big" value="RES-20080" autocomplete="off">
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+          <button id="lookupBtn" class="btn btn-primary big w-100">Buscar reserva</button>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-bold">Hóspede</label>
+          <select id="guestSelect" class="form-select big" disabled><option>Busque a reserva primeiro</option></select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-bold">Nome que será enviado ao Face Scanner</label>
+          <input id="expectedName" class="form-control big locked" readonly value="">
+        </div>
+      </div>
+      <div id="reservationInfo" class="guest-box mt-3 muted">Nenhuma reserva carregada.</div>
+    </section>
+
+    <section class="cardx mb-4">
+      <div class="d-flex gap-3 align-items-center mb-4"><span class="step">2</span><h2 class="h3 fw-bold mb-0">Analisar documento</h2></div>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label fw-bold">Tipo</label>
+          <select id="documentType" class="form-select big"><option value="auto">Detectar automaticamente</option><option value="cnh">CNH</option><option value="rg">RG</option><option value="cin">CIN</option><option value="passport">Passaporte</option></select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">Frente / página com foto</label>
+          <input id="front" class="form-control big" type="file" accept="image/jpeg,image/png,image/webp">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">Verso (opcional)</label>
+          <input id="back" class="form-control big" type="file" accept="image/jpeg,image/png,image/webp">
+        </div>
+      </div>
+      <button id="analyzeBtn" class="btn btn-primary big mt-4" disabled>Analisar com Face Scanner</button>
+      <div id="decision" class="mt-4 h5 status muted">Aguardando teste.</div>
+      <pre id="result" class="result mt-3">Aguardando documento…</pre>
+    </section>
+
+    <p class="muted">Esta tela é apenas para homologação da integração. Ela não altera o status da reserva nem marca validação facial como concluída.</p>
+  </main>
+  <script src="/face-scanner-test.js"></script>
+</body>
+</html>
