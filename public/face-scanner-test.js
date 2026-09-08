@@ -123,7 +123,7 @@ async function startCamera() {
     setGuideVisible(true);
     captureGuide?.start();
     $('faceDecision').className = 'mt-4 h5 status ok';
-    $('faceDecision').textContent = 'Câmera aberta. Siga as instruções sobre a imagem; a captura pode ocorrer automaticamente.';
+    $('faceDecision').textContent = 'Câmera aberta. Siga as instruções; esta etapa valida a qualidade antes da verificação de identidade.';
   } catch (error) {
     $('faceDecision').className = 'mt-4 h5 status bad';
     $('faceDecision').textContent = `Não foi possível abrir a câmera: ${error.message}`;
@@ -161,7 +161,7 @@ async function captureAndSend(source = 'manual') {
   $('captureBtn').disabled = true;
   $('faceDecision').className = 'mt-4 h5 status muted';
   $('faceDecision').textContent = source === 'auto'
-    ? 'Captura automática realizada. Validando qualidade…'
+    ? 'Captura automática realizada. Validando qualidade e estado de verificação…'
     : 'Enviando captura ao Face Scanner…';
   $('faceResult').textContent = 'Processando captura…';
 
@@ -190,24 +190,42 @@ async function captureAndSend(source = 'manual') {
 
     if (result.status === 'review') {
       $('faceDecision').className = 'mt-4 h5 status warn';
-      $('faceDecision').textContent = `REFAÇA A CAPTURA · ${reviewInstruction(result)}`;
+      $('faceDecision').textContent = `REVISÃO NECESSÁRIA · ${reviewInstruction(result)}`;
       $('captureBtn').disabled = false;
       captureGuide?.setPaused(false);
       captureInProgress = false;
       return;
     }
 
-    if (result.status === 'not_configured') {
-      $('faceDecision').className = 'mt-4 h5 status ok';
-      $('faceDecision').textContent = `CAPTURA ACEITA · qualidade ${quality.acceptable ? 'OK' : 'não confirmada'} · provider biométrico ainda não configurado`;
+    if (result.status === 'not_configured' || result.identity_verified !== true) {
+      $('faceDecision').className = 'mt-4 h5 status bad';
+      $('faceDecision').textContent = `CAPTURA COM QUALIDADE ${quality.acceptable ? 'APROVADA' : 'NÃO CONFIRMADA'} · IDENTIDADE NÃO VERIFICADA · provider biométrico ${result.provider || 'não configurado'}`;
       stopCamera();
       verificationId = null;
       captureInProgress = false;
       return;
     }
 
-    $('faceDecision').className = 'mt-4 h5 status ok';
-    $('faceDecision').textContent = result.message || `Resultado: ${result.status}`;
+    if (result.status === 'mismatch') {
+      $('faceDecision').className = 'mt-4 h5 status bad';
+      $('faceDecision').textContent = 'IDENTIDADE NÃO CONFERE · a verificação biométrica não confirmou a pessoa capturada.';
+      stopCamera();
+      verificationId = null;
+      captureInProgress = false;
+      return;
+    }
+
+    if (result.status === 'match' && result.identity_verified === true) {
+      $('faceDecision').className = 'mt-4 h5 status ok';
+      $('faceDecision').textContent = 'IDENTIDADE VERIFICADA · documento e captura ao vivo confirmados pelo provider biométrico.';
+      stopCamera();
+      verificationId = null;
+      captureInProgress = false;
+      return;
+    }
+
+    $('faceDecision').className = 'mt-4 h5 status warn';
+    $('faceDecision').textContent = result.message || `Resultado biométrico: ${result.status}`;
     stopCamera();
     verificationId = null;
     captureInProgress = false;
@@ -288,8 +306,8 @@ $('analyzeBtn').addEventListener('click', async () => {
         ? `NOME CONFERE · ${payload.totem_context.guest_name} · etapa de câmera liberada`
         : `REVISÃO DOCUMENTAL · OCR: ${validation.extracted || 'não identificado'} · etapa de câmera liberada para homologação`;
       $('startCameraBtn').disabled = false;
-      $('faceDecision').className = 'mt-4 h5 status ok';
-      $('faceDecision').textContent = 'Documento liberou a captura. Clique em Abrir câmera.';
+      $('faceDecision').className = 'mt-4 h5 status warn';
+      $('faceDecision').textContent = 'Documento liberou a captura. A identidade só será considerada verificada se o provider biométrico retornar confirmação.';
       $('cameraPlaceholder').textContent = 'Documento aprovado. Abra a câmera para continuar.';
     } else if (status === 'review') {
       $('decision').className = 'mt-4 h5 status warn';
