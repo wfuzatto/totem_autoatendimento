@@ -55,9 +55,120 @@ function initCaptureGuide() {
   });
 }
 
+function clearFaceComparison() {
+  $('faceComparison').hidden = true;
+  $('documentFaceImg').removeAttribute('src');
+  $('documentFaceImg').hidden = true;
+  $('liveFaceImg').removeAttribute('src');
+  $('liveFaceImg').hidden = true;
+  $('documentFacePlaceholder').hidden = false;
+  $('liveFacePlaceholder').hidden = false;
+  $('documentFaceMeta').textContent = 'Aguardando detecção no documento.';
+  $('liveFaceMeta').textContent = 'Aguardando captura da webcam.';
+}
+
+function showFaceComparison() {
+  $('faceComparison').hidden = false;
+}
+
+function cropDetectedFace(source, sourceWidth, sourceHeight, bbox, analyzedWidth, analyzedHeight) {
+  if (!source || !bbox || bbox.length < 4 || !analyzedWidth || !analyzedHeight) return null;
+  const [bx, by, bw, bh] = bbox.map(Number);
+  if (![bx, by, bw, bh].every(Number.isFinite) || bw <= 0 || bh <= 0) return null;
+
+  const scaleX = sourceWidth / analyzedWidth;
+  const scaleY = sourceHeight / analyzedHeight;
+  const x = bx * scaleX;
+  const y = by * scaleY;
+  const w = bw * scaleX;
+  const h = bh * scaleY;
+
+  // O detector retorna a caixa justa da face. A prévia ganha margem para mostrar
+  // testa, queixo e parte do entorno sem alterar a imagem original.
+  const centerX = x + (w / 2);
+  const centerY = y + (h / 2);
+  let size = Math.max(w * 1.75, h * 1.55);
+  size = Math.min(size, sourceWidth, sourceHeight);
+
+  let sx = centerX - (size / 2);
+  let sy = centerY - (size / 2);
+  sx = Math.max(0, Math.min(sx, sourceWidth - size));
+  sy = Math.max(0, Math.min(sy, sourceHeight - size));
+
+  const out = document.createElement('canvas');
+  out.width = 360;
+  out.height = 360;
+  const outCtx = out.getContext('2d', { alpha: false });
+  outCtx.drawImage(source, sx, sy, size, size, 0, 0, out.width, out.height);
+  return out.toDataURL('image/jpeg', 0.94);
+}
+
+async function loadImageFromFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Não foi possível abrir a imagem do documento para recorte.'));
+    };
+    image.src = url;
+  });
+}
+
+async function renderDocumentFacePreview(result, frontFile, backFile) {
+  const portrait = result?.portrait;
+  if (!portrait?.found || !portrait?.bbox || !portrait?.image_width || !portrait?.image_height) return;
+  const sourceFile = portrait.source === 'back' ? backFile : frontFile;
+  if (!sourceFile) return;
+
+  try {
+    const image = await loadImageFromFile(sourceFile);
+    const dataUrl = cropDetectedFace(
+      image,
+      image.naturalWidth,
+      image.naturalHeight,
+      portrait.bbox,
+      portrait.image_width,
+      portrait.image_height
+    );
+    if (!dataUrl) return;
+    $('documentFaceImg').src = dataUrl;
+    $('documentFaceImg').hidden = false;
+    $('documentFacePlaceholder').hidden = true;
+    $('documentFaceMeta').textContent = `Rosto recortado pelo detector · origem: ${portrait.source}`;
+    showFaceComparison();
+  } catch (error) {
+    $('documentFaceMeta').textContent = error.message;
+    showFaceComparison();
+  }
+}
+
+function renderLiveFacePreview(result, captureCanvas) {
+  if (!result?.bbox || !result?.image_width || !result?.image_height || !captureCanvas?.width || !captureCanvas?.height) return;
+  const dataUrl = cropDetectedFace(
+    captureCanvas,
+    captureCanvas.width,
+    captureCanvas.height,
+    result.bbox,
+    result.image_width,
+    result.image_height
+  );
+  if (!dataUrl) return;
+  $('liveFaceImg').src = dataUrl;
+  $('liveFaceImg').hidden = false;
+  $('liveFacePlaceholder').hidden = true;
+  $('liveFaceMeta').textContent = 'Rosto recortado da captura da webcam.';
+  showFaceComparison();
+}
+
 function resetFaceStep(message = 'Documento ainda não liberou a etapa de câmera.') {
   verificationId = null;
   stopCamera();
+  clearFaceComparison();
   $('startCameraBtn').disabled = true;
   $('captureBtn').disabled = true;
   $('faceDecision').className = 'mt-4 h5 status muted';
@@ -187,21 +298,13 @@ async function captureAndSend(source = 'manual') {
     const result = payload.face_scanner || {};
     const quality = result.quality || {};
     $('faceResult').textContent = JSON.stringify(payload, null, 2);
+    renderLiveFacePreview(result, canvas);
 
     if (result.status === 'review') {
       $('faceDecision').className = 'mt-4 h5 status warn';
       $('faceDecision').textContent = `REVISÃO NECESSÁRIA · ${reviewInstruction(result)}`;
       $('captureBtn').disabled = false;
       captureGuide?.setPaused(false);
-      captureInProgress = false;
-      return;
-    }
-
-    if (result.status === 'not_configured' || result.identity_verified !== true) {
-      $('faceDecision').className = 'mt-4 h5 status bad';
-      $('faceDecision').textContent = `CAPTURA COM QUALIDADE ${quality.acceptable ? 'APROVADA' : 'NÃO CONFIRMADA'} · IDENTIDADE NÃO VERIFICADA · provider biométrico ${result.provider || 'não configurado'}`;
-      stopCamera();
-      verificationId = null;
       captureInProgress = false;
       return;
     }
@@ -218,6 +321,15 @@ async function captureAndSend(source = 'manual') {
     if (result.status === 'match' && result.identity_verified === true) {
       $('faceDecision').className = 'mt-4 h5 status ok';
       $('faceDecision').textContent = 'IDENTIDADE VERIFICADA · documento e captura ao vivo confirmados pelo provider biométrico.';
+      stopCamera();
+      verificationId = null;
+      captureInProgress = false;
+      return;
+    }
+
+    if (result.status === 'not_configured' || result.identity_verified !== true) {
+      $('faceDecision').className = 'mt-4 h5 status bad';
+      $('faceDecision').textContent = `CAPTURA COM QUALIDADE ${quality.acceptable ? 'APROVADA' : 'NÃO CONFIRMADA'} · IDENTIDADE NÃO VERIFICADA · provider biométrico ${result.provider || 'não configurado'}`;
       stopCamera();
       verificationId = null;
       captureInProgress = false;
@@ -298,6 +410,7 @@ $('analyzeBtn').addEventListener('click', async () => {
     const result = payload.face_scanner || {};
     const validation = result.name_validation || {};
     const status = validation.status;
+    await renderDocumentFacePreview(result, front, back);
 
     if ((status === 'match' || status === 'review') && result.can_verify_face && result.verification_id) {
       verificationId = result.verification_id;
@@ -312,11 +425,15 @@ $('analyzeBtn').addEventListener('click', async () => {
     } else if (status === 'review') {
       $('decision').className = 'mt-4 h5 status warn';
       $('decision').textContent = `REVISÃO NECESSÁRIA · OCR: ${validation.extracted || 'não identificado'} · score ${validation.score ?? '-'}`;
-      resetFaceStep('Documento não gerou uma sessão válida para captura.');
+      verificationId = null;
+      $('startCameraBtn').disabled = true;
+      $('faceDecision').textContent = 'Documento não gerou uma sessão válida para captura.';
     } else {
       $('decision').className = 'mt-4 h5 status bad';
       $('decision').textContent = `NOME NÃO CONFERE · esperado: ${payload.totem_context.guest_name} · OCR: ${validation.extracted || 'não identificado'}`;
-      resetFaceStep('Documento não liberou a etapa de câmera.');
+      verificationId = null;
+      $('startCameraBtn').disabled = true;
+      $('faceDecision').textContent = 'Documento não liberou a etapa de câmera.';
     }
 
     $('result').textContent = JSON.stringify(payload, null, 2);
@@ -330,6 +447,7 @@ $('analyzeBtn').addEventListener('click', async () => {
   }
 });
 
+clearFaceComparison();
 if (!window.isSecureContext) $('secureWarning').hidden = false;
 initCaptureGuide();
 window.addEventListener('beforeunload', stopCamera);
