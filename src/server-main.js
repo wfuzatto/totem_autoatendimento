@@ -1,8 +1,11 @@
 const fs = require('fs');
 const http = require('http');
 const https = require('https');
+const crypto = require('crypto');
 const express = require('express');
+const QRCode = require('qrcode');
 const runtimeApp = require('./server-runtime');
+const { db } = require('./db');
 const { installCheckoutRuntime } = require('./checkout-runtime');
 const { installDocumentRemovalRuntime } = require('./document-removal-runtime');
 const { installFaceScannerRuntime } = require('./face-scanner-runtime');
@@ -65,11 +68,60 @@ function forwardedPrefixResponses(req, res, next) {
   next();
 }
 
+function runtimeSetting(key) {
+  try {
+    return String(db.prepare('SELECT value FROM runtime_settings WHERE key=?').get(key)?.value || '').trim();
+  } catch (_) {
+    return '';
+  }
+}
+
+function publicBaseForRequest(req) {
+  const basePath = normalizeBasePath(req.get('x-forwarded-prefix') || '');
+  const configured = runtimeSetting('public_qr_base_url');
+
+  if (configured) {
+    try {
+      const parsed = new URL(configured);
+      parsed.hash = '';
+      parsed.search = '';
+      const configuredPath = parsed.pathname.replace(/\/+$/, '');
+      if (basePath && (!configuredPath || configuredPath === '/')) parsed.pathname = basePath;
+      return parsed.toString().replace(/\/$/, '');
+    } catch (_) {}
+  }
+
+  const proto = String(req.get('x-forwarded-proto') || req.protocol || 'http').split(',')[0].trim();
+  const host = String(req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim();
+  return `${proto}://${host}${basePath}`.replace(/\/$/, '');
+}
+
+// O QR precisa nascer com o prefixo público. Prefixar apenas o JSON depois não
+// basta, pois a imagem QR já foi codificada pelo backend com a URL original.
+async function createUploadToken(req, res) {
+  const id = Number(req.params.id);
+  const reservation = db.prepare('SELECT id FROM reservations WHERE id=?').get(id);
+  if (!reservation) return res.status(404).json({ error: 'Reserva não encontrada.' });
+
+  const token = crypto.randomBytes(24).toString('hex');
+  const expires = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+  db.prepare('DELETE FROM upload_tokens WHERE reservation_id=?').run(id);
+  db.prepare('INSERT INTO upload_tokens(token,reservation_id,expires_at) VALUES(?,?,?)').run(token, id, expires);
+
+  const publicBase = publicBaseForRequest(req);
+  const url = `${publicBase}/upload.html?token=${encodeURIComponent(token)}`;
+  const qrDataUrl = await QRCode.toDataURL(url, { width: 420, margin: 2 });
+  return res.json({ token, expires_at: expires, url, qr_data_url: qrDataUrl, public_base_url: publicBase });
+}
+
 // O Caddy remove /totem antes de encaminhar. A aplicação continua usando suas
 // rotas nativas (/api, /assets, /vendor etc.) e apenas as URLs devolvidas ao
 // navegador recebem novamente o prefixo indicado por X-Forwarded-Prefix.
 const app = express();
 app.use(forwardedPrefixResponses);
+app.post('/api/reservations/:id/upload-token', express.json(), (req, res, next) => {
+  createUploadToken(req, res).catch(next);
+});
 app.use(runtimeApp);
 
 function start() {
