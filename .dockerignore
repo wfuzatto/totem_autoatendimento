@@ -1,0 +1,30 @@
+.git
+.github
+.env
+node_modules
+npm-debug.log*
+.DS_Store
+
+# Legado Node/Electron não entra na imagem PHP V2.
+electron
+src
+public
+test
+docs
+scripts
+package.json
+package-lock.json
+
+# Dados de execução nunca são incorporados na imagem.
+PROJETO_PHP/data/*
+PROJETO_PHP/uploads/*
+PROJETO_PHP/branding/*
+PROJETO_PHP/**/*.sqlite
+PROJETO_PHP/**/*.sqlite3
+PROJETO_PHP/**/*.db
+
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
