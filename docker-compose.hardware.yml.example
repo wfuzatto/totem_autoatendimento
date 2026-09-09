@@ -1,0 +1,20 @@
+# Override opcional para o equipamento físico do totem.
+# Use somente no host que realmente possui os devices.
+# Exemplo:
+#   docker compose -f docker-compose.yml -f docker-compose.hardware.yml up -d
+#
+# Copie este arquivo para docker-compose.hardware.yml e ajuste os devices.
+
+services:
+  app:
+    # Impressora USB ESC/POS em Linux, quando /dev/usb/lp0 existir.
+    devices:
+      - /dev/usb/lp0:/dev/usb/lp0
+    environment:
+      TOTEM_PRINTER_DEVICE: /dev/usb/lp0
+
+    # Para integração futura com dispositivos USB que precisem do barramento cru,
+    # prefira mapear somente o device necessário. Evite privileged: true.
+    # Exemplo ACR122U, após identificar o device no host:
+    # devices:
+    #   - /dev/bus/usb/001/005:/dev/bus/usb/001/005
