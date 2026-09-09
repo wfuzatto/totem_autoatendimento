@@ -8,6 +8,17 @@ $action = (string)($_GET['action'] ?? $_POST['action'] ?? 'config');
 $method = strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 $data = request_data();
 
+function require_active_face_reservation(int $reservationId): void
+{
+    start_app_session();
+    $activeId = (int)($_SESSION['active_reservation_id'] ?? 0);
+    $activeAt = (int)($_SESSION['active_reservation_at'] ?? 0);
+    if ($reservationId <= 0 || $activeId !== $reservationId || $activeAt < time() - 1800) {
+        json_response(['error'=>'Sessão da reserva inválida ou expirada. Localize a reserva novamente.'], 403);
+    }
+    $_SESSION['active_reservation_at'] = time();
+}
+
 try {
     switch ($action) {
         case 'config':
@@ -17,15 +28,19 @@ try {
 
         case 'prepare':
             if ($method !== 'POST') json_response(['error'=>'Método não permitido.'], 405);
+            $reservationId = (int)($data['reservation_id'] ?? 0);
+            require_active_face_reservation($reservationId);
             json_response(face_scanner_prepare_guest(
-                (int)($data['reservation_id'] ?? 0),
+                $reservationId,
                 (int)($data['guest_id'] ?? 0)
             ));
 
         case 'verify':
             if ($method !== 'POST') json_response(['error'=>'Método não permitido.'], 405);
+            $reservationId = (int)($data['reservation_id'] ?? 0);
+            require_active_face_reservation($reservationId);
             json_response(face_scanner_verify_guest(
-                (int)($data['reservation_id'] ?? 0),
+                $reservationId,
                 (int)($data['guest_id'] ?? 0),
                 (string)($data['capture'] ?? ''),
                 isset($data['verification_id']) ? (string)$data['verification_id'] : null
