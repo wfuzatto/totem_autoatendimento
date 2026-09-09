@@ -17,6 +17,17 @@ function transform(file) {
   let text = fs.readFileSync(file, 'utf8');
 
   if (ext === '.html') {
+    // A tela de teste do Face Scanner usa fetch('/api/...'). Quando publicada
+    // sob /totem, precisa carregar o bootstrap de base path antes dos scripts
+    // da captura para que as chamadas sigam para /totem/api/... e não para a
+    // raiz do HUB/Caddy.
+    if (path.basename(file) === 'face-scanner-test.html' && !text.includes('base-path.js')) {
+      text = text.replace(
+        /\n\s*<script src="\/face-capture-helper\.js/,
+        '\n  <script src="/base-path.js?v=face-test-subpath-20260909"></script>\n  <script src="/face-capture-helper.js'
+      );
+    }
+
     // Apenas referências estáticas do HTML recebem o prefixo. Não alteramos
     // JavaScript inline/externo porque strings como '/api/*' também fazem parte
     // da lógica da aplicação e uma reescrita textual pode mudar seu significado.
