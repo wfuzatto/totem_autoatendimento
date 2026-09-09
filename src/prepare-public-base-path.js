@@ -12,45 +12,15 @@ const base = normalizeBasePath(process.argv[3] || process.env.PUBLIC_BASE_PATH |
 
 if (!base) process.exit(0);
 
-function prefixQuotedStrings(text) {
-  let out = '';
-  let i = 0;
-  while (i < text.length) {
-    const quote = text[i];
-    if (!['"', "'", '`'].includes(quote)) {
-      out += text[i++];
-      continue;
-    }
-
-    out += quote;
-    i += 1;
-    if (text[i] === '/' && text[i + 1] !== '/' && !text.startsWith(`${base}/`, i) && !text.startsWith(base + quote, i)) {
-      out += base;
-    }
-
-    while (i < text.length) {
-      const ch = text[i];
-      out += ch;
-      i += 1;
-      if (ch === '\\' && i < text.length) {
-        out += text[i++];
-        continue;
-      }
-      if (ch === quote) break;
-    }
-  }
-  return out;
-}
-
 function transform(file) {
   const ext = path.extname(file).toLowerCase();
   let text = fs.readFileSync(file, 'utf8');
 
   if (ext === '.html') {
+    // Apenas referências estáticas do HTML recebem o prefixo. Não alteramos
+    // JavaScript inline/externo porque strings como '/api/*' também fazem parte
+    // da lógica da aplicação e uma reescrita textual pode mudar seu significado.
     text = text.replace(/\b(href|src|action)=(['"])\/(?!\/)/gi, (_m, attr, quote) => `${attr}=${quote}${base}/`);
-    text = text.replace(/(<script\b[^>]*>)([\s\S]*?)(<\/script>)/gi, (_m, open, body, close) => `${open}${prefixQuotedStrings(body)}${close}`);
-  } else if (ext === '.js' || ext === '.json' || ext === '.webmanifest') {
-    text = prefixQuotedStrings(text);
   } else if (ext === '.css') {
     text = text.replace(/url\((['"]?)\/(?!\/)/gi, (_m, quote) => `url(${quote}${base}/`);
   } else {
@@ -69,4 +39,4 @@ function walk(dir) {
 }
 
 walk(root);
-console.log(`Public assets preparados para base path ${base}`);
+console.log(`Referências estáticas preparadas para base path ${base}; JavaScript preservado.`);
