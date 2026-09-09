@@ -38,13 +38,30 @@ try {
         case 'verify':
             if ($method !== 'POST') json_response(['error'=>'Método não permitido.'], 405);
             $reservationId = (int)($data['reservation_id'] ?? 0);
+            $guestId = (int)($data['guest_id'] ?? 0);
             require_active_face_reservation($reservationId);
-            json_response(face_scanner_verify_guest(
+            $result = face_scanner_verify_guest(
                 $reservationId,
-                (int)($data['guest_id'] ?? 0),
+                $guestId,
                 (string)($data['capture'] ?? ''),
                 isset($data['verification_id']) ? (string)$data['verification_id'] : null
-            ));
+            );
+            $provider = (string)($result['face_result']['provider'] ?? '');
+            if (!empty($result['verified']) && $provider !== 'internal') {
+                db()->prepare('UPDATE guests SET face_verified=0 WHERE id=? AND reservation_id=?')->execute([$guestId,$reservationId]);
+                audit('face_scanner.synthetic_result.blocked',$reservationId,[
+                    'guest_id'=>$guestId,
+                    'provider'=>$provider ?: 'unknown',
+                ]);
+                $result['verified'] = false;
+                $result['retry_allowed'] = false;
+                $result['message'] = 'Resultado sintético/homologação não pode aprovar identidade no totem. Configure o provider interno SFace.';
+                $result['bundle'] = reservation_bundle($reservationId);
+                if (isset($result['face_result']) && is_array($result['face_result'])) {
+                    $result['face_result']['identity_verified'] = false;
+                }
+            }
+            json_response($result);
 
         case 'settings_get':
             require_admin();
