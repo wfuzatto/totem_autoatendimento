@@ -96,7 +96,16 @@ try {
             $id=(int)($data['reservation_id']??0);$doc=(int)($data['document_id']??0);json_response(remove_document($id,$doc));
 
         case 'face_verify':
-            $id=(int)($data['reservation_id']??0);$guest=(int)($data['guest_id']??0);json_response(verify_face($id,$guest));
+            $id=(int)($data['reservation_id']??0);$guest=(int)($data['guest_id']??0);
+            if(setting_bool('face_scanner_enabled',false)){
+                $faceStmt=db()->prepare('SELECT face_verified FROM guests WHERE id=? AND reservation_id=? AND adult=1');
+                $faceStmt->execute([$guest,$id]);
+                $faceRow=$faceStmt->fetch();
+                if(!$faceRow)json_response(['error'=>'Hóspede adulto não encontrado.'],404);
+                if(empty($faceRow['face_verified']))json_response(['error'=>'Validação biométrica real pendente. Capture e compare o rosto antes de avançar.'],409);
+                json_response(reservation_bundle($id) ?: ['error'=>'Reserva não encontrada.']);
+            }
+            json_response(verify_face($id,$guest));
 
         case 'govbr_verify':
             $id=(int)($data['reservation_id']??0);json_response(verify_govbr($id));
