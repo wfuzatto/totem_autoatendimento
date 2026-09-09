@@ -72,7 +72,12 @@ try {
 
         case 'lookup':
             $type=(string)($data['type']??'auto');if(!in_array($type,['auto','reservation','cpf','qr'],true))$type='auto';
-            $b=find_reservation((string)($data['query']??''),$type==='qr'?'reservation':$type);if(!$b)json_response(['error'=>'Reserva não encontrada.'],404);audit('reservation.lookup',(int)$b['reservation']['id'],['query_type'=>$type]);json_response($b);
+            $b=find_reservation((string)($data['query']??''),$type==='qr'?'reservation':$type);if(!$b)json_response(['error'=>'Reserva não encontrada.'],404);
+            start_app_session();
+            $_SESSION['active_reservation_id']=(int)$b['reservation']['id'];
+            $_SESSION['active_reservation_at']=time();
+            $_SESSION['face_scanner_verifications']=[];
+            audit('reservation.lookup',(int)$b['reservation']['id'],['query_type'=>$type]);json_response($b);
 
         case 'reservation_bundle':
             $b=reservation_bundle((int)($_GET['id']??0));if(!$b)json_response(['error'=>'Reserva não encontrada.'],404);json_response($b);
