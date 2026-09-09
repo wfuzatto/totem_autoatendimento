@@ -1,0 +1,38 @@
+name: totem-autoatendimento-v2
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${TOTEM_IMAGE_NAME:-totem-autoatendimento:v2}
+    container_name: ${TOTEM_CONTAINER_NAME:-totem-autoatendimento-v2}
+    restart: unless-stopped
+    init: true
+    environment:
+      TZ: ${TZ:-America/Sao_Paulo}
+      TOTEM_ADMIN_PASSWORD: ${TOTEM_ADMIN_PASSWORD:-251933}
+      TOTEM_PUBLIC_BASE_URL: ${TOTEM_PUBLIC_BASE_URL:-}
+      TOTEM_EXIT_SECRET: ${TOTEM_EXIT_SECRET:-}
+      TOTEM_PRINTER_DEVICE: ${TOTEM_PRINTER_DEVICE:-}
+    ports:
+      - "${TOTEM_HTTP_PORT:-8080}:80"
+    volumes:
+      - totem_data:/var/www/html/data
+      - totem_uploads:/var/www/html/uploads
+      - totem_branding:/var/www/html/branding
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS 'http://127.0.0.1/api.php?action=health' | grep -q '\"ok\":true'"]
+      interval: 15s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    stop_grace_period: 15s
+
+volumes:
+  totem_data:
+    name: ${TOTEM_DATA_VOLUME:-totem_autoatendimento_v2_data}
+  totem_uploads:
+    name: ${TOTEM_UPLOADS_VOLUME:-totem_autoatendimento_v2_uploads}
+  totem_branding:
+    name: ${TOTEM_BRANDING_VOLUME:-totem_autoatendimento_v2_branding}
