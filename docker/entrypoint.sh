@@ -16,4 +16,9 @@ command -v tesseract >/dev/null
 command -v pdftoppm >/dev/null
 apache2ctl -t >/dev/null
 
+# Inicializa banco, schema, defaults e dados demo antes de o Apache ficar disponível.
+# Isso faz o container nascer pronto e também valida escrita no volume persistente.
+php -r 'require "/var/www/html/app/core.php"; db()->query("SELECT 1"); echo "Totem database ready\n";'
+chown -R www-data:www-data "$APP/data" "$APP/uploads" "$APP/branding"
+
 exec docker-php-entrypoint "$@"
