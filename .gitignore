@@ -3,3 +3,9 @@ data/
 .env
 *.log
 .DS_Store
+runtime/
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
