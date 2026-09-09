@@ -1,149 +1,248 @@
-# Totem de Autoatendimento Hoteleiro
+# Totem de Autoatendimento Hoteleiro — V2 Docker
 
-MVP funcional de um totem vertical para **check-in e check-out**, preparado para integrar TOTVS Hospitalidade, pulseiras NFC, webcam, impressora térmica e TEF.
+Esta branch (`php-v2-development`) é a evolução Docker da V1 PHP congelada em `php-v1-stable`.
 
-## O que já funciona
+A V2 roda de forma autocontida com **Docker + Docker Compose**. O host não precisa instalar XAMPP, Apache, PHP, Tesseract, Poppler, Node.js ou Electron.
 
-- Tela inicial com escolha **Check-in / Check-out**.
-- Fluxo de check-out: reserva/UH/pulseira → extrato unificado por hóspede → contestação opcional → devolução obrigatória das pulseiras de adultos → pagamento PIX/débito/crédito → checkout.
-- Fluxo de check-in: reserva/CPF → conferência → documentos + QR Code para upload pelo celular → gov.br opcional → webcam + validação facial simulada → gravação de pulseiras → pagamento pendente → check-in.
-- Dashboard protegido pela senha inicial **251933** no ícone de engrenagem.
-- Flags administrativas para ativar/desativar contestação, gov.br, biometria e devolução de pulseiras.
-- Configuração visual de TOTVS, ACR122U, POS 80 mm, Gertec PPC930/SiTef e webcam.
-- Interface responsiva para 1366x900, 1920x1080 e orientação vertical.
-- Acessibilidade: touch targets grandes, alto contraste, aumento de fonte e leitura da tela por voz.
-- SQLite persistente em WAL, auditoria e uploads persistidos.
-- Electron em modo **kiosk**: fullscreen, sem menu, bloqueio de atalhos comuns e saída somente pelo painel autenticado.
-- Serviços `systemd --user` com `Restart=always` para backend e kiosk.
-- Healthcheck HTTP em `/api/health`.
-
-## Importante sobre o MVP
-
-As telas e regras de negócio estão implementadas, mas quatro integrações estão deliberadamente em modo simulado até recebermos credenciais, documentação/homologação e definição final do ambiente:
-
-1. **TOTVS Hospitalidade**: o modo `mock` usa reservas locais. O provider `totvs` já existe na configuração e será ligado aos endpoints contratados/liberados pela TOTVS.
-2. **Pagamento**: o PPC930 aparece no fluxo, porém o provider `mock` aprova automaticamente. O provider `sitef` está reservado para a integração TEF homologada.
-3. **NFC ACR122U**: o fluxo real está preparado para PC/SC; o MVP simula leitura/gravação para validar UX e regras.
-4. **Biometria**: a webcam USB é aberta de verdade via `getUserMedia`, mas o matching facial ainda é simulado. Não liberar produção sem motor biométrico real, política de retenção e requisitos de privacidade/LGPD.
-
-## Teste rápido
-
-Requer Node.js 20 ou superior.
+## Subida rápida
 
 ```bash
 git clone https://github.com/wfuzatto/totem_autoatendimento.git
 cd totem_autoatendimento
+git switch php-v2-development
 cp .env.example .env
-npm install
-npm start
+docker compose up -d --build
 ```
 
-Abra:
+Acesse:
 
 ```text
-http://127.0.0.1:3080
+http://IP_DO_SERVIDOR:8080/
 ```
 
-Para testar o shell fullscreen:
-
-```bash
-npm run kiosk
-```
-
-### Dados de demonstração
-
-**Check-out**
-
-- Reserva: `RES-10025`
-- UH: `204`
-- Pulseira: `SAGA-204-CARLOS`
-- Segunda pulseira: `SAGA-204-MARIANA`
-
-**Check-in**
-
-- Reserva: `RES-20080`
-- CPF: `98765432100`
-
-**Configuração**
-
-- Senha inicial: `251933`
-
-## Instalação no Ubuntu para uso como totem
-
-O instalador prepara dependências do Electron/PCSC, instala o projeto e cria serviços com reinício automático:
-
-```bash
-chmod +x scripts/install-ubuntu.sh
-./scripts/install-ubuntu.sh
-```
-
-Depois, dentro da sessão gráfica:
-
-```bash
-systemctl --user start totem-kiosk.service
-```
-
-Status e logs:
-
-```bash
-systemctl --user status totem-backend.service
-systemctl --user status totem-kiosk.service
-journalctl --user -u totem-backend.service -f
-journalctl --user -u totem-kiosk.service -f
-```
-
-Para um equipamento dedicado, configure login automático do usuário do totem no Ubuntu. O serviço gráfico então sobe o Electron automaticamente.
-
-## Estrutura
+No próprio host:
 
 ```text
-src/
-  server.js          API, regras dos fluxos e uploads
-  db.js              SQLite, schema, configurações e dados demo
-  auth.js            sessão administrativa
-public/
-  index.html          UI principal do totem
-  app.js              máquina de fluxo check-in/check-out
-  styles.css          layout touch/responsivo/acessível
-  upload.html         página móvel de envio de documentos
-  upload.js
-electron/
-  main.js             shell kiosk
-  preload.js          bridge restrita para saída autorizada
-scripts/
-  install-ubuntu.sh   instalação e systemd
-
-test/
-  app.test.js         testes da API e dados demo
+http://127.0.0.1:8080/
 ```
+
+A porta pode ser alterada em `.env`:
+
+```text
+TOTEM_HTTP_PORT=8080
+```
+
+## O que existe dentro da imagem
+
+- Apache
+- PHP 8.3
+- PDO / SQLite
+- mbstring
+- fileinfo
+- OpenSSL
+- Tesseract OCR
+- idioma português do Tesseract
+- idioma inglês do Tesseract
+- Poppler / `pdftoppm`
+- aplicação PHP do Totem
+
+Não é necessário instalar essas dependências no sistema operacional do servidor.
 
 ## Persistência
 
-Por padrão o banco e documentos ficam em:
+Os dados que não podem desaparecer ficam fora da camada descartável da imagem em volumes Docker nomeados:
 
 ```text
-data/totem.sqlite
-data/uploads/
+totem_autoatendimento_v2_data
+totem_autoatendimento_v2_uploads
+totem_autoatendimento_v2_branding
 ```
 
-O banco usa `journal_mode=WAL`, `foreign_keys=ON` e `busy_timeout` para reduzir travamentos por concorrência.
+Eles armazenam respectivamente:
 
-## Próximas integrações
+- SQLite, segredo da instalação e dados persistentes;
+- documentos enviados;
+- logomarca, propaganda e outras imagens de branding.
 
-A sequência recomendada é:
+Recriar o container ou atualizar a imagem não apaga esses volumes.
 
-1. ligar leitura real do ACR122U e descobrir exatamente como a Saga grava a UH/pulseira;
-2. mapear os endpoints TOTVS disponíveis no contrato do hotel e substituir o repositório `mock`;
-3. definir SiTef ou outra adquirência/TEF para o PPC930 e homologar o pinpad;
-4. ligar ESC/POS da impressora 80 mm para comprovantes;
-5. escolher/homologar o motor de comparação facial e política LGPD;
-6. integrar o login oficial gov.br conforme credenciais e fluxo liberado para a aplicação.
+Para ver os volumes:
+
+```bash
+docker volume ls | grep totem_autoatendimento
+```
+
+**Não use `docker compose down -v` em produção**, pois `-v` remove os volumes persistentes.
+
+## Atualização
+
+```bash
+git pull origin php-v2-development
+docker compose up -d --build
+```
+
+O Compose recria o container quando necessário e mantém os volumes.
+
+## Status
+
+```bash
+docker compose ps
+docker compose logs -f app
+```
+
+O serviço possui healthcheck interno. O estado esperado é:
+
+```text
+healthy
+```
+
+Teste manual:
+
+```bash
+curl http://127.0.0.1:8080/api.php?action=health
+```
+
+Resposta esperada inclui:
+
+```json
+{"ok":true}
+```
+
+## Banco
+
+O SQLite é criado automaticamente no primeiro start do container:
+
+```text
+/var/www/html/data/totem.sqlite
+```
+
+O entrypoint inicializa schema, configurações padrão e dados de demonstração antes de liberar o Apache.
+
+Dados demo atuais:
+
+- check-out: `RES-10025`
+- UH: `204`
+- pulseira: `SAGA-204-CARLOS`
+- check-in: `RES-20080`
+- CPF: `98765432100`
+
+Senha administrativa inicial padrão:
+
+```text
+251933
+```
+
+Altere em `.env` antes da primeira inicialização de um banco novo:
+
+```text
+TOTEM_ADMIN_PASSWORD=uma_senha_forte
+```
+
+## Configuração
+
+Copie:
+
+```bash
+cp .env.example .env
+```
+
+Principais variáveis:
+
+```text
+TOTEM_IMAGE_NAME=totem-autoatendimento:v2
+TOTEM_CONTAINER_NAME=totem-autoatendimento-v2
+TOTEM_HTTP_PORT=8080
+TOTEM_ADMIN_PASSWORD=251933
+TOTEM_PUBLIC_BASE_URL=
+TOTEM_EXIT_SECRET=
+TOTEM_PRINTER_DEVICE=
+```
+
+Se `TOTEM_EXIT_SECRET` ficar vazio, o próprio sistema gera um segredo e o persiste no volume `data`.
+
+## OCR
+
+Tesseract e Poppler já fazem parte da imagem. A validação avançada de CNH/RG/CIN usa:
+
+```text
+tesseract: por+eng
+pdftoppm: até 3 páginas do PDF a 220 dpi
+```
+
+Não há instalação externa de OCR no host.
+
+## Hardware físico
+
+A aplicação atual ainda mantém NFC, TEF, impressão e biometria real nos estados já definidos pelo projeto. A imagem Docker não inventa integração física que ainda não foi homologada.
+
+Para devices Linux existe um exemplo separado:
+
+```text
+docker-compose.hardware.yml.example
+```
+
+Copie para:
+
+```text
+docker-compose.hardware.yml
+```
+
+ajuste somente os devices existentes no host e suba com:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.hardware.yml up -d
+```
+
+Não é necessário usar `privileged: true` para a instalação padrão.
+
+## Câmera QR / webcam
+
+A câmera continua sendo acessada pelo **navegador cliente** através de `getUserMedia()`. A escolha da câmera e outras preferências físicas do terminal permanecem locais naquele navegador, evitando que vários totens/tablets/celulares misturem configurações.
+
+Em `localhost`, navegadores normalmente aceitam câmera em contexto local. Para acesso por IP LAN em outro equipamento, use HTTPS confiável.
+
+## HTTPS
+
+A imagem base atende HTTP na porta interna 80. O Compose publica essa porta no host (8080 por padrão).
+
+Quando houver domínio/certificado definitivo, o HTTPS deve ser colocado em um serviço Docker de proxy/reverse proxy, mantendo a aplicação `app` na rede interna. Não é necessário instalar proxy no host.
 
 ## Segurança
 
-- Troque a senha administrativa antes da produção.
-- Não salve segredo TOTVS ou TEF diretamente no Git.
-- Use HTTPS quando celular e totem estiverem em redes distintas ou não confiáveis.
-- Restrinja o backend por firewall na rede do hotel.
-- Defina retenção e descarte dos documentos e imagens biométricas.
-- O modo `mock` é para validação funcional, não para operação real com hóspedes.
+- `.env` não vai para o Git;
+- certificados e chaves são ignorados pelo Git;
+- diretórios internos da aplicação são protegidos por `.htaccess`;
+- Apache oculta assinatura/versão detalhada;
+- PHP não expõe `X-Powered-By`;
+- arquivos SQLite, SQL, configurações internas, uploads e branding não são servidos diretamente;
+- a chave privada de uma CA nunca deve ser distribuída para clientes.
+
+## Validação automática
+
+A workflow:
+
+```text
+.github/workflows/docker-v2.yml
+```
+
+valida em cada push da `php-v2-development`:
+
+- sintaxe do Compose;
+- build da imagem;
+- subida do container;
+- healthcheck;
+- endpoint HTTP;
+- extensões PHP obrigatórias;
+- Tesseract `por` e `eng`;
+- Poppler;
+- sintaxe do Apache;
+- persistência do SQLite após recriar o container.
+
+## Política de versões
+
+```text
+php-v1-stable       = V1 PHP/XAMPP congelada
+php-v2-development  = V2 Docker, única branch para novas alterações
+```
+
+Não alterar `php-v1-stable` sem autorização explícita.
