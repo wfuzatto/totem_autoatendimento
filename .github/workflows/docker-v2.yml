@@ -31,7 +31,6 @@ jobs:
       - name: Start stack
         env:
           TOTEM_HTTP_PORT: 18080
-          TOTEM_ADMIN_PASSWORD: 251933
         run: docker compose up -d
 
       - name: Wait for healthy container
@@ -55,6 +54,34 @@ jobs:
         run: |
           curl -fsS http://127.0.0.1:18080/api.php?action=health | tee /tmp/health.json
           grep -q '"ok":true' /tmp/health.json
+
+      - name: Validate admin login
+        run: |
+          ADMIN_PASSWORD=$(docker compose exec -T app printenv TOTEM_ADMIN_PASSWORD)
+          curl -fsS -c /tmp/totem-cookies.txt \
+            -H 'Content-Type: application/json' \
+            --data "{\"password\":\"${ADMIN_PASSWORD}\"}" \
+            http://127.0.0.1:18080/api.php?action=admin_login | tee /tmp/admin-login.json
+          grep -q '"ok":true' /tmp/admin-login.json
+          curl -fsS -b /tmp/totem-cookies.txt \
+            http://127.0.0.1:18080/api.php?action=admin_me | tee /tmp/admin-me.json
+          grep -q '"authenticated\":true' /tmp/admin-me.json
+
+      - name: Validate admin password resync on restart
+        run: |
+          docker compose exec -T app php -r 'require "/var/www/html/app/core.php"; $p=db()->prepare("UPDATE settings SET value=? WHERE key=?"); $p->execute([password_hash("temporary-ci-password", PASSWORD_DEFAULT), "admin_password_hash"]);'
+          docker compose restart app
+          for i in $(seq 1 30); do
+            status=$(docker inspect --format='{{.State.Health.Status}}' totem-autoatendimento-v2 2>/dev/null || true)
+            [ "$status" = "healthy" ] && break
+            sleep 2
+          done
+          ADMIN_PASSWORD=$(docker compose exec -T app printenv TOTEM_ADMIN_PASSWORD)
+          curl -fsS -c /tmp/totem-cookies-resync.txt \
+            -H 'Content-Type: application/json' \
+            --data "{\"password\":\"${ADMIN_PASSWORD}\"}" \
+            http://127.0.0.1:18080/api.php?action=admin_login | tee /tmp/admin-login-resync.json
+          grep -q '"ok":true' /tmp/admin-login-resync.json
 
       - name: Validate PHP extensions and OCR
         run: |
