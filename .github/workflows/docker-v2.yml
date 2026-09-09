@@ -55,7 +55,7 @@ jobs:
           curl -fsS http://127.0.0.1:18080/api.php?action=health | tee /tmp/health.json
           grep -q '"ok":true' /tmp/health.json
 
-      - name: Validate admin login
+      - name: Validate admin login and protected settings session
         run: |
           ADMIN_PASSWORD=$(docker compose exec -T app printenv TOTEM_ADMIN_PASSWORD)
           curl -fsS -c /tmp/totem-cookies.txt \
@@ -66,6 +66,9 @@ jobs:
           curl -fsS -b /tmp/totem-cookies.txt \
             http://127.0.0.1:18080/api.php?action=admin_me | tee /tmp/admin-me.json
           grep -q '"authenticated\":true' /tmp/admin-me.json
+          curl -fsS -b /tmp/totem-cookies.txt \
+            http://127.0.0.1:18080/api.php?action=settings_get | tee /tmp/settings-get.json
+          grep -q '"hotel_name"' /tmp/settings-get.json
 
       - name: Validate admin password resync on restart
         run: |
