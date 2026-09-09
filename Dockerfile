@@ -15,6 +15,8 @@ RUN npm install --omit=dev --omit=optional \
 FROM node:22.23.2-bookworm-slim AS runtime
 
 ENV NODE_ENV=production
+ARG PUBLIC_BASE_PATH=/totem
+ENV PUBLIC_BASE_PATH=${PUBLIC_BASE_PATH}
 WORKDIR /app
 
 COPY --from=dependencies /app/node_modules ./node_modules
@@ -22,7 +24,10 @@ COPY package.json ./
 COPY src ./src
 COPY public ./public
 
-RUN mkdir -p /app/data/uploads /app/data/branding /app/data/print-jobs \
+# A UI Docker é publicada sob /totem. O script altera apenas artefatos públicos
+# (HTML/JS/CSS/manifest), preservando as rotas internas nativas /api/*.
+RUN node src/prepare-public-base-path.js /app/public "$PUBLIC_BASE_PATH" \
+    && mkdir -p /app/data/uploads /app/data/branding /app/data/print-jobs \
     && chown -R node:node /app
 
 USER node
