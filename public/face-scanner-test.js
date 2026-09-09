@@ -65,6 +65,39 @@ function clearFaceComparison() {
   $('liveFacePlaceholder').hidden = false;
   $('documentFaceMeta').textContent = 'Aguardando detecção no documento.';
   $('liveFaceMeta').textContent = 'Aguardando captura da webcam.';
+  for (const prefix of ['documentAligned', 'liveAligned']) {
+    $(`${prefix}Img`).removeAttribute('src');
+    $(`${prefix}Img`).hidden = true;
+    $(`${prefix}Placeholder`).hidden = false;
+    $(`${prefix}Meta`).textContent = 'Aguardando resposta do Face Scanner.';
+  }
+}
+
+function showAlignedFace(prefix, alignment, label) {
+  const encoded = alignment?.jpeg_base64;
+  if (!encoded) return;
+  $(`${prefix}Img`).src = `data:image/jpeg;base64,${encoded}`;
+  $(`${prefix}Img`).hidden = false;
+  $(`${prefix}Placeholder`).hidden = true;
+  $(`${prefix}Meta`).textContent = label;
+  showFaceComparison();
+}
+
+function renderBiometricDetails(result) {
+  const details = $('biometricDetails');
+  details.hidden = false;
+  const value = (id, item, suffix = '') => { $(id).textContent = item == null ? '—' : `${item}${suffix}`; };
+  value('metricProvider', result.provider);
+  value('metricModel', result.model);
+  value('metricModelVersion', result.model_version);
+  value('metricName', result.metric);
+  value('metricSimilarity', result.similarity);
+  value('metricReviewThreshold', result.review_threshold);
+  value('metricMatchThreshold', result.match_threshold);
+  value('metricProcessingMs', result.processing_ms, ' ms');
+  value('metricDocumentMs', result.embedding_document_ms, ' ms');
+  value('metricLiveMs', result.embedding_live_ms, ' ms');
+  value('metricSimilarityMs', result.similarity_ms, ' ms');
 }
 
 function showFaceComparison() {
@@ -140,6 +173,7 @@ async function renderDocumentFacePreview(result, frontFile, backFile) {
     $('documentFaceImg').hidden = false;
     $('documentFacePlaceholder').hidden = true;
     $('documentFaceMeta').textContent = `Rosto recortado pelo detector · origem: ${portrait.source}`;
+    showAlignedFace('documentAligned', portrait.alignment, 'Face alinhada recebida do Face Scanner.');
     showFaceComparison();
   } catch (error) {
     $('documentFaceMeta').textContent = error.message;
@@ -162,6 +196,7 @@ function renderLiveFacePreview(result, captureCanvas) {
   $('liveFaceImg').hidden = false;
   $('liveFacePlaceholder').hidden = true;
   $('liveFaceMeta').textContent = 'Rosto recortado da captura da webcam.';
+  showAlignedFace('liveAligned', result.alignment, 'Face alinhada recebida do Face Scanner.');
   showFaceComparison();
 }
 
@@ -174,6 +209,7 @@ function resetFaceStep(message = 'Documento ainda não liberou a etapa de câmer
   $('faceDecision').className = 'mt-4 h5 status muted';
   $('faceDecision').textContent = message;
   $('faceResult').textContent = 'Aguardando captura ao vivo…';
+  $('biometricDetails').hidden = true;
   $('cameraPlaceholder').textContent = 'Valide primeiro o documento para liberar a câmera.';
 }
 
@@ -299,12 +335,19 @@ async function captureAndSend(source = 'manual') {
     const quality = result.quality || {};
     $('faceResult').textContent = JSON.stringify(payload, null, 2);
     renderLiveFacePreview(result, canvas);
+    renderBiometricDetails(result);
 
     if (result.status === 'review') {
       $('faceDecision').className = 'mt-4 h5 status warn';
-      $('faceDecision').textContent = `REVISÃO NECESSÁRIA · ${reviewInstruction(result)}`;
-      $('captureBtn').disabled = false;
-      captureGuide?.setPaused(false);
+      if (result.retry_allowed === true) {
+        $('faceDecision').textContent = `REVISÃO DE QUALIDADE · ${reviewInstruction(result)}`;
+        $('captureBtn').disabled = false;
+        captureGuide?.setPaused(false);
+      } else {
+        $('faceDecision').textContent = 'REVISÃO MANUAL NECESSÁRIA · esta tentativa foi encerrada e não pode ser repetida com a mesma sessão.';
+        stopCamera();
+        verificationId = null;
+      }
       captureInProgress = false;
       return;
     }
