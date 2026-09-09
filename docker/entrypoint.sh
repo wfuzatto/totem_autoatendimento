@@ -19,6 +19,11 @@ apache2ctl -t >/dev/null
 # Inicializa banco, schema, defaults e dados demo antes de o Apache ficar disponível.
 # Isso faz o container nascer pronto e também valida escrita no volume persistente.
 php -r 'require "/var/www/html/app/core.php"; db()->query("SELECT 1"); echo "Totem database ready\n";'
+
+# Na V2 Docker, TOTEM_ADMIN_PASSWORD é a fonte de verdade da senha administrativa.
+# Isso corrige volumes persistentes que tenham sido criados anteriormente com outro hash.
+php "$APP/tools/sync_admin_password.php"
+
 chown -R www-data:www-data "$APP/data" "$APP/uploads" "$APP/branding"
 
 exec docker-php-entrypoint "$@"
