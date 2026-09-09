@@ -17,56 +17,59 @@ function normalizeBasePath(value) {
   return `/${raw.replace(/^\/+|\/+$/g, '')}`;
 }
 
-const publicBasePath = normalizeBasePath(process.env.PUBLIC_BASE_PATH || '/totem');
-
-function prefixPublicValue(value, publicOrigin = '') {
-  if (!publicBasePath) return value;
+function prefixPublicValue(value, basePath, publicOrigin = '') {
+  if (!basePath) return value;
   if (typeof value === 'string') {
-    if (value.startsWith('/') && !value.startsWith('//') && value !== publicBasePath && !value.startsWith(`${publicBasePath}/`)) {
-      return `${publicBasePath}${value}`;
+    if (value.startsWith('/') && !value.startsWith('//') && value !== basePath && !value.startsWith(`${basePath}/`)) {
+      return `${basePath}${value}`;
     }
 
     if (publicOrigin && /^https?:\/\//i.test(value)) {
       try {
         const parsed = new URL(value);
-        if (parsed.origin === publicOrigin && parsed.pathname !== publicBasePath && !parsed.pathname.startsWith(`${publicBasePath}/`)) {
-          parsed.pathname = `${publicBasePath}${parsed.pathname.startsWith('/') ? parsed.pathname : `/${parsed.pathname}`}`;
+        if (parsed.origin === publicOrigin && parsed.pathname !== basePath && !parsed.pathname.startsWith(`${basePath}/`)) {
+          parsed.pathname = `${basePath}${parsed.pathname.startsWith('/') ? parsed.pathname : `/${parsed.pathname}`}`;
           return parsed.toString();
         }
       } catch (_) {}
     }
     return value;
   }
-  if (Array.isArray(value)) return value.map(item => prefixPublicValue(item, publicOrigin));
+  if (Array.isArray(value)) return value.map(item => prefixPublicValue(item, basePath, publicOrigin));
   if (value && typeof value === 'object' && !Buffer.isBuffer(value)) {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, prefixPublicValue(item, publicOrigin)]));
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, prefixPublicValue(item, basePath, publicOrigin)])
+    );
   }
   return value;
 }
 
-function prefixPublicResponses(req, res, next) {
+function forwardedPrefixResponses(req, res, next) {
+  const basePath = normalizeBasePath(req.get('x-forwarded-prefix') || '');
+  if (!basePath) return next();
+
   const proto = String(req.get('x-forwarded-proto') || req.protocol || 'http').split(',')[0].trim();
   const host = String(req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim();
   const publicOrigin = host ? `${proto}://${host}` : '';
 
   const originalJson = res.json.bind(res);
-  res.json = payload => originalJson(prefixPublicValue(payload, publicOrigin));
+  res.json = payload => originalJson(prefixPublicValue(payload, basePath, publicOrigin));
 
   const originalRedirect = res.redirect.bind(res);
   res.redirect = (statusOrUrl, maybeUrl) => {
     if (typeof statusOrUrl === 'number') {
-      return originalRedirect(statusOrUrl, prefixPublicValue(maybeUrl, publicOrigin));
+      return originalRedirect(statusOrUrl, prefixPublicValue(maybeUrl, basePath, publicOrigin));
     }
-    return originalRedirect(prefixPublicValue(statusOrUrl, publicOrigin));
+    return originalRedirect(prefixPublicValue(statusOrUrl, basePath, publicOrigin));
   };
   next();
 }
 
+// O Caddy remove /totem antes de encaminhar. A aplicação continua usando suas
+// rotas nativas (/api, /assets, /vendor etc.) e apenas as URLs devolvidas ao
+// navegador recebem novamente o prefixo indicado por X-Forwarded-Prefix.
 const app = express();
-if (publicBasePath) {
-  app.use(publicBasePath, prefixPublicResponses, runtimeApp);
-}
-// Mantém healthchecks e integrações internas Docker nas rotas nativas (/api/...).
+app.use(forwardedPrefixResponses);
 app.use(runtimeApp);
 
 function start() {
@@ -75,7 +78,7 @@ function start() {
   const httpServer = http.createServer(app);
   httpServer.listen(port, host, () => {
     console.log(`Totem HTTP interno em http://${host}:${port}`);
-    console.log(`Totem público preparado em ${publicBasePath || '/'} atrás do reverse proxy.`);
+    console.log('Totem preparado para publicação em /totem via reverse proxy com strip-prefix.');
   });
 
   const keyFile = process.env.HTTPS_KEY_FILE;
