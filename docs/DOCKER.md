@@ -8,7 +8,7 @@ Produção usa Node.js `22.23.2` LTS. A linha Node 20 não deve ser utilizada no
 
 ## Produção recomendada
 
-O backend é orquestrado pelo repositório `wfuzatto/hub_hotelaria` e não deve publicar `3080` diretamente na Internet.
+O backend é orquestrado pelo repositório `wfuzatto/hub_core` e não deve publicar `3080` diretamente na Internet.
 
 ```text
 Caddy :443 -> totem-api:3080
@@ -17,8 +17,10 @@ Caddy :443 -> totem-api:3080
 Persistência:
 
 ```text
-/app/data -> volume Docker `totem_data`
+/app/data -> volume Docker lógico `totem_data`
 ```
+
+No stack oficial HUB Core, o volume físico persistente é `hub_core_totem_data`.
 
 O volume contém SQLite, uploads, branding e print jobs existentes.
 
