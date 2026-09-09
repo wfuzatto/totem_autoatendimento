@@ -4,7 +4,7 @@ Totem vertical para **check-in e check-out**, preparado para integrar TOTVS Hosp
 
 ## Arquitetura de produção
 
-O backend do Totem roda em **Docker**, orquestrado pelo repositório pai `hub_hotelaria`. XAMPP não faz parte do servidor de produção.
+O backend do Totem roda em **Docker**, orquestrado pelo repositório pai `hub_core`. XAMPP não faz parte do servidor de produção.
 
 ```text
 Internet / rede do hotel
@@ -83,14 +83,14 @@ npm run kiosk
 
 ## Produção no servidor
 
-Não suba o backend deste repositório manualmente no Ubuntu. O deploy oficial é pelo HUB:
+Não suba o backend deste repositório manualmente no Ubuntu. O deploy oficial é pelo HUB Core:
 
 ```bash
-cd hub_hotelaria
-./scripts/update.sh
+cd hub_core
+bash scripts/update_docker.sh
 ```
 
-O `hub_hotelaria` baixa o commit homologado deste repositório para `modules/totem_autoatendimento`, constrói a imagem e atualiza o container `totem-api`.
+O `hub_core` baixa o commit homologado deste repositório para `modules/totem_autoatendimento`, constrói a imagem e atualiza o container `totem-api`.
 
 ## Estrutura
 
@@ -117,7 +117,7 @@ test/
 
 ## Persistência
 
-No container do HUB os dados do Totem ficam em volume Docker persistente (`totem_data`). No modo local, o padrão continua:
+No container do HUB os dados do Totem ficam em volume Docker persistente (`totem_data`). No stack oficial o volume físico é `hub_core_totem_data`. No modo local, o padrão continua:
 
 ```text
 data/totem.sqlite
