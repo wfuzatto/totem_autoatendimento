@@ -72,6 +72,6 @@ $loadingEnabled = setting_bool('show_transition_loading', true);
   <script src="<?= htmlspecialchars(app_url('assets/loading-settings.js')) ?>?v=16"></script>
   <script src="<?= htmlspecialchars(app_url('assets/v2-home-icons.js')) ?>?v=9"></script>
   <script src="<?= htmlspecialchars(app_url('assets/v2-admin-visuals.js')) ?>?v=13"></script>
-  <script src="<?= htmlspecialchars(app_url('assets/settings-always-auth.js')) ?>?v=11"></script>
+  <script src="<?= htmlspecialchars(app_url('assets/settings-always-auth.js')) ?>?v=17"></script>
 </body>
 </html>
