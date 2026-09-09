@@ -19,31 +19,45 @@ function normalizeBasePath(value) {
 
 const publicBasePath = normalizeBasePath(process.env.PUBLIC_BASE_PATH || '/totem');
 
-function prefixPublicValue(value) {
+function prefixPublicValue(value, publicOrigin = '') {
   if (!publicBasePath) return value;
   if (typeof value === 'string') {
     if (value.startsWith('/') && !value.startsWith('//') && value !== publicBasePath && !value.startsWith(`${publicBasePath}/`)) {
       return `${publicBasePath}${value}`;
     }
+
+    if (publicOrigin && /^https?:\/\//i.test(value)) {
+      try {
+        const parsed = new URL(value);
+        if (parsed.origin === publicOrigin && parsed.pathname !== publicBasePath && !parsed.pathname.startsWith(`${publicBasePath}/`)) {
+          parsed.pathname = `${publicBasePath}${parsed.pathname.startsWith('/') ? parsed.pathname : `/${parsed.pathname}`}`;
+          return parsed.toString();
+        }
+      } catch (_) {}
+    }
     return value;
   }
-  if (Array.isArray(value)) return value.map(prefixPublicValue);
+  if (Array.isArray(value)) return value.map(item => prefixPublicValue(item, publicOrigin));
   if (value && typeof value === 'object' && !Buffer.isBuffer(value)) {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, prefixPublicValue(item)]));
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, prefixPublicValue(item, publicOrigin)]));
   }
   return value;
 }
 
-function prefixPublicResponses(_req, res, next) {
+function prefixPublicResponses(req, res, next) {
+  const proto = String(req.get('x-forwarded-proto') || req.protocol || 'http').split(',')[0].trim();
+  const host = String(req.get('x-forwarded-host') || req.get('host') || '').split(',')[0].trim();
+  const publicOrigin = host ? `${proto}://${host}` : '';
+
   const originalJson = res.json.bind(res);
-  res.json = payload => originalJson(prefixPublicValue(payload));
+  res.json = payload => originalJson(prefixPublicValue(payload, publicOrigin));
 
   const originalRedirect = res.redirect.bind(res);
   res.redirect = (statusOrUrl, maybeUrl) => {
     if (typeof statusOrUrl === 'number') {
-      return originalRedirect(statusOrUrl, prefixPublicValue(maybeUrl));
+      return originalRedirect(statusOrUrl, prefixPublicValue(maybeUrl, publicOrigin));
     }
-    return originalRedirect(prefixPublicValue(statusOrUrl));
+    return originalRedirect(prefixPublicValue(statusOrUrl, publicOrigin));
   };
   next();
 }
