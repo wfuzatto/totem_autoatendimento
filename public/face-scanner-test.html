@@ -2,161 +2,118 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Teste Face Scanner · Totem</title>
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/vendor/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/theme.css">
   <style>
-    body { background: #eef3f7; color: #182330; }
-    .test-shell { max-width: 1160px; margin: 0 auto; padding: 30px 20px 60px; }
-    .test-header { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; margin-bottom: 24px; }
-    .eyebrow { text-transform: uppercase; letter-spacing: .14em; font-weight: 800; color: #60798c; }
-    .test-card { background: #fff; border: 1px solid #d9e4eb; border-radius: 22px; padding: 24px; margin-bottom: 22px; box-shadow: 0 12px 34px rgba(32,55,75,.05); }
-    .test-step { display: grid; grid-template-columns: 52px 1fr; gap: 18px; }
-    .step-number { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; background: #144e6a; color: #fff; font-weight: 900; font-size: 1.15rem; }
-    .form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
-    .form-grid.three { grid-template-columns: repeat(3,minmax(0,1fr)); }
-    label { font-weight: 700; color: #304453; display: grid; gap: 7px; }
-    input, select { border: 1px solid #cad8e1; border-radius: 12px; padding: 12px 13px; font: inherit; width: 100%; background: #fbfdfe; }
-    button { border: 0; border-radius: 12px; padding: 12px 18px; font: inherit; font-weight: 800; cursor: pointer; background: #1d73e8; color: #fff; }
-    button.secondary { background: #e6edf2; color: #20394b; }
-    button.danger { background: #b8323b; }
-    button:disabled { opacity: .48; cursor: not-allowed; }
-    .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
-    .muted { color: #63798b; }
-    .status { margin-top: 16px; padding: 13px 15px; border-radius: 14px; background: #f5f8fa; border: 1px solid #dce6ec; }
-    .status.ok { background: #edf8f1; border-color: #c9e8d4; color: #1c6b3e; }
-    .status.warn { background: #fff8e8; border-color: #f1dfad; color: #805c0d; }
-    .status.bad { background: #fff0ef; border-color: #efcbc6; color: #9b342d; }
-    .result { margin-top: 16px; white-space: pre-wrap; word-break: break-word; background: #111d27; color: #dce8f0; padding: 16px; border-radius: 14px; min-height: 76px; font-size: .83rem; }
-    .camera-shell { position: relative; max-width: 680px; aspect-ratio: 4/3; background: #0e1a24; border-radius: 20px; overflow: hidden; display: grid; place-items: center; margin-top: 16px; }
-    .camera-shell video, .camera-shell canvas { width: 100%; height: 100%; object-fit: cover; }
-    .camera-placeholder { color: #90a4b3; padding: 24px; text-align: center; }
-    #faceGuide { position: absolute; inset: 0; pointer-events: none; }
-    #captureInstruction, #captureCountdown, #captureMetrics { margin-top: 10px; }
-    .secure-warning { background: #fff1ee; border: 1px solid #f0cbc3; border-radius: 14px; padding: 13px 15px; color: #913c31; }
-    .metrics-grid { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin-top: 15px; }
-    .metric { background: #f7fafc; border: 1px solid #dce6ec; border-radius: 14px; padding: 13px; }
-    .metric strong { display: block; font-size: .78rem; color: #607789; margin-bottom: 5px; }
-    .face-comparison-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; margin-top: 18px; }
-    .face-snapshot { border: 1px solid #d2e0e8; border-radius: 20px; padding: 18px; background: #f8fbfd; }
-    .face-snapshot h3 { margin: 0 0 14px; }
-    .face-snapshot-stage { aspect-ratio: 1/1; border-radius: 18px; overflow: hidden; background: #101d27; display: grid; place-items: center; }
-    .face-snapshot-stage img { width: 100%; height: 100%; object-fit: cover; }
-    .face-snapshot-placeholder { color: #9db0be; text-align: center; padding: 18px; }
-    .face-snapshot-meta { color: #60778a; margin-top: 11px; }
-    @media(max-width:760px){.test-header,.test-step{display:grid}.form-grid,.form-grid.three,.metrics-grid,.face-comparison-grid{grid-template-columns:1fr}}
+    body{background:#eef3f6;color:#17222d}.wrap{max-width:1180px;margin:0 auto;padding:32px 20px}.cardx{background:#fff;border:1px solid #d8e1e8;border-radius:24px;padding:28px;box-shadow:0 8px 28px #0000000a}.result{background:#0f1a24;color:#dfeaf4;border-radius:18px;padding:18px;min-height:120px;white-space:pre-wrap;overflow:auto}.status{font-weight:700}.ok{color:#198754}.warn{color:#b58100}.bad{color:#b42318}.muted{color:#607484}.step{display:inline-flex;width:52px;height:52px;border-radius:16px;align-items:center;justify-content:center;background:#113f58;color:#fff;font-weight:800;font-size:1.3rem}.guest-box{background:#f7fafc;border:1px solid #d8e1e8;border-radius:16px;padding:16px}.locked{background:#eef3f6!important}.big{font-size:1.05rem;padding:.9rem 1rem}.camera-frame{position:relative;background:#0b141d;border-radius:20px;overflow:hidden;max-width:760px;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center}.camera-frame video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}.camera-placeholder{color:#93a4b3;text-align:center;padding:30px}.camera-actions{display:flex;gap:12px;flex-wrap:wrap}.secure-warning{border:1px solid #f2c94c;background:#fff8db;color:#7a5d00;border-radius:14px;padding:12px 14px}.identity-warning{border:1px solid #f0b4ae;background:#fff0ee;color:#8d1f18;border-radius:14px;padding:12px 14px;font-weight:700}.face-guide{position:absolute;left:50%;top:49%;width:42%;height:64%;transform:translate(-50%,-50%);border:4px solid #f2c94c;border-radius:48% 48% 44% 44%;box-shadow:0 0 0 9999px rgba(4,12,20,.35);pointer-events:none;transition:border-color .2s,box-shadow .2s}.guide-idle,.guide-warn{border-color:#f2c94c}.guide-bad{border-color:#dc3545;box-shadow:0 0 0 9999px rgba(40,0,0,.32)}.guide-good{border-color:#28a745;box-shadow:0 0 0 9999px rgba(0,30,10,.22)}.capture-instruction{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:min(90%,680px);z-index:3;padding:10px 16px;border-radius:999px;text-align:center;font-weight:800;background:rgba(15,26,36,.88);color:#fff;backdrop-filter:blur(5px)}.capture-bad{background:rgba(160,25,25,.90)}.capture-warn{background:rgba(127,91,0,.90)}.capture-good{background:rgba(16,112,64,.92)}.capture-metrics{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:3;background:rgba(15,26,36,.82);color:#e9f2f8;padding:7px 13px;border-radius:999px;font-size:.9rem;white-space:nowrap}.capture-countdown{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:4;width:116px;height:116px;border-radius:50%;background:rgba(16,112,64,.92);color:#fff;display:flex;align-items:center;justify-content:center;font-size:4rem;font-weight:900;box-shadow:0 10px 35px rgba(0,0,0,.25)}.capture-tips{max-width:760px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.capture-tip{background:#f7fafc;border:1px solid #d8e1e8;border-radius:14px;padding:10px 12px;text-align:center;font-weight:600;color:#4e6473}.face-comparison{border-top:1px solid #d8e1e8;padding-top:24px}.face-comparison-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;max-width:760px}.face-snapshot{background:#f7fafc;border:1px solid #d8e1e8;border-radius:18px;padding:16px}.face-snapshot-title{font-weight:800;margin-bottom:10px}.face-snapshot-frame{aspect-ratio:1/1;border-radius:16px;overflow:hidden;background:#0f1a24;display:flex;align-items:center;justify-content:center}.face-snapshot-frame img{width:100%;height:100%;object-fit:cover}.face-snapshot-placeholder{color:#93a4b3;text-align:center;padding:20px}.face-snapshot-meta{margin-top:10px;color:#607484;font-size:.9rem}.biometric-details{max-width:760px;background:#f7fafc;border:1px solid #d8e1e8;border-radius:18px;padding:16px}.biometric-details dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0}.biometric-details dt{font-weight:800}.biometric-details dd{margin:0}@media(max-width:700px){.capture-tips{grid-template-columns:1fr}.face-guide{width:54%;height:62%}.capture-metrics{font-size:.78rem;max-width:90%;overflow:hidden;text-overflow:ellipsis}.face-comparison-grid{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
-  <main class="test-shell">
-    <header class="test-header">
+  <main class="wrap">
+    <header class="d-flex justify-content-between align-items-start gap-3 mb-4">
       <div>
-        <div class="eyebrow">Totem hoteleiro · integração</div>
-        <h1>Teste Face Scanner</h1>
-        <p class="muted">Reserva → documento → captura ao vivo, usando o nome do hóspede diretamente da reserva.</p>
+        <div class="text-uppercase fw-bold muted" style="letter-spacing:.16em">Totem Hoteleiro · Integração</div>
+        <h1 class="display-5 fw-bold mb-2">Teste Face Scanner</h1>
+        <p class="lead muted mb-0">Reserva → documento → captura ao vivo, usando o nome do hóspede diretamente da reserva.</p>
       </div>
-      <div id="scannerStatus" class="badge rounded-pill text-bg-secondary p-3">Verificando Face Scanner…</div>
+      <div id="scannerStatus" class="badge rounded-pill text-bg-secondary p-3">verificando Face Scanner…</div>
     </header>
 
-    <section class="test-card">
-      <div class="test-step">
-        <div class="step-number">1</div>
-        <div>
-          <h2>Selecionar reserva e hóspede</h2>
-          <div class="form-grid">
-            <label>Número da reserva<input id="reservationNumber" value="RES-20080" autocomplete="off"></label>
-            <div class="actions" style="align-items:end"><button id="lookupReservationBtn">Buscar reserva</button></div>
-            <label>Hóspede<select id="guestSelect" disabled><option>Reserva não carregada</option></select></label>
-            <label>Nome que será enviado ao Face Scanner<input id="expectedName" readonly></label>
-          </div>
-          <div id="reservationStatus" class="status muted">Informe a reserva.</div>
+    <section class="cardx mb-4">
+      <div class="d-flex gap-3 align-items-center mb-4"><span class="step">1</span><h2 class="h3 fw-bold mb-0">Selecionar reserva e hóspede</h2></div>
+      <div class="row g-3">
+        <div class="col-md-8">
+          <label class="form-label fw-bold">Número da reserva</label>
+          <input id="reservationNumber" class="form-control big" value="RES-20080" autocomplete="off">
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+          <button id="lookupBtn" class="btn btn-primary big w-100">Buscar reserva</button>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-bold">Hóspede</label>
+          <select id="guestSelect" class="form-select big" disabled><option>Busque a reserva primeiro</option></select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label fw-bold">Nome que será enviado ao Face Scanner</label>
+          <input id="expectedName" class="form-control big locked" readonly value="">
         </div>
       </div>
+      <div id="reservationInfo" class="guest-box mt-3 muted">Nenhuma reserva carregada.</div>
     </section>
 
-    <section class="test-card">
-      <div class="test-step">
-        <div class="step-number">2</div>
-        <div>
-          <h2>Analisar documento</h2>
-          <div class="form-grid three">
-            <label>Tipo<select id="documentType"><option value="auto">Detectar automaticamente</option><option value="passport">Passaporte</option><option value="cnh">CNH</option><option value="rg">RG</option><option value="cin">CIN</option></select></label>
-            <label>Frente / página com foto<input id="frontFile" type="file" accept="image/jpeg,image/png,image/webp"></label>
-            <label>Verso (opcional)<input id="backFile" type="file" accept="image/jpeg,image/png,image/webp"></label>
-          </div>
-          <div class="actions"><button id="analyzeBtn" disabled>Analisar com Face Scanner</button></div>
-          <div id="documentDecision" class="status muted">Aguardando teste.</div>
-          <pre id="documentResult" class="result">Aguardando documento…</pre>
+    <section class="cardx mb-4">
+      <div class="d-flex gap-3 align-items-center mb-4"><span class="step">2</span><h2 class="h3 fw-bold mb-0">Analisar documento</h2></div>
+      <div class="row g-3">
+        <div class="col-md-4">
+          <label class="form-label fw-bold">Tipo</label>
+          <select id="documentType" class="form-select big"><option value="auto">Detectar automaticamente</option><option value="cnh">CNH</option><option value="rg">RG</option><option value="cin">CIN</option><option value="passport">Passaporte</option></select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">Frente / página com foto</label>
+          <input id="front" class="form-control big" type="file" accept="image/jpeg,image/png,image/webp">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-bold">Verso (opcional)</label>
+          <input id="back" class="form-control big" type="file" accept="image/jpeg,image/png,image/webp">
         </div>
       </div>
+      <button id="analyzeBtn" class="btn btn-primary big mt-4" disabled>Analisar com Face Scanner</button>
+      <div id="decision" class="mt-4 h5 status muted">Aguardando teste.</div>
+      <pre id="result" class="result mt-3">Aguardando documento…</pre>
     </section>
 
-    <section class="test-card">
-      <div class="test-step">
-        <div class="step-number">3</div>
-        <div>
-          <h2>Captura ao vivo</h2>
-          <div id="secureWarning" class="secure-warning" hidden>O navegador bloqueou a câmera porque a página não está em um contexto HTTPS confiável.</div>
-          <div class="camera-shell">
-            <video id="video" autoplay playsinline muted hidden></video>
-            <canvas id="canvas" hidden></canvas>
-            <canvas id="faceGuide" hidden></canvas>
-            <div id="cameraPlaceholder" class="camera-placeholder">Valide primeiro o documento para liberar a câmera.</div>
-          </div>
-          <div id="captureInstruction" class="status muted" hidden>Posicione o rosto na área indicada.</div>
-          <div id="captureCountdown" class="status warn" hidden></div>
-          <div id="captureMetrics" class="muted" hidden></div>
-          <div class="actions">
-            <button id="startCameraBtn" disabled>Abrir câmera</button>
-            <button id="captureBtn" disabled>Capturar agora</button>
-            <button id="stopCameraBtn" class="secondary" disabled>Fechar câmera</button>
-          </div>
-          <div id="faceDecision" class="status muted">Documento ainda não liberou a etapa de câmera.</div>
-          <pre id="faceResult" class="result">Aguardando captura ao vivo…</pre>
+    <section class="cardx mb-4">
+      <div class="d-flex gap-3 align-items-center mb-3"><span class="step">3</span><h2 class="h3 fw-bold mb-0">Foto ao vivo</h2></div>
+      <p class="muted mb-3">Depois que o documento for validado, o sistema orienta o posicionamento e faz uma pré-checagem contínua de presença de rosto, enquadramento, luz e nitidez.</p>
+      <div class="identity-warning mb-3">IMPORTANTE: qualidade aprovada da câmera não significa identidade verificada. A identidade só pode ser marcada como confirmada quando um provider biométrico configurado retornar uma confirmação explícita.</div>
+      <div id="secureWarning" class="secure-warning mb-3" hidden>O navegador não considera esta página um contexto seguro. Para usar a câmera, acesse por HTTPS com certificado confiável.</div>
+      <div class="camera-frame mb-3">
+        <video id="video" autoplay playsinline muted hidden></video>
+        <div id="cameraPlaceholder" class="camera-placeholder">Valide primeiro o documento para liberar a câmera.</div>
+        <div id="faceGuide" class="face-guide guide-idle" hidden></div>
+        <div id="captureInstruction" class="capture-instruction capture-warn" hidden aria-live="polite">Posicione seu rosto dentro da área indicada.</div>
+        <div id="captureMetrics" class="capture-metrics" hidden>Pré-análise parada</div>
+        <div id="captureCountdown" class="capture-countdown" hidden></div>
+        <canvas id="canvas" hidden></canvas>
+      </div>
+      <div class="capture-tips mb-3">
+        <div class="capture-tip">Olhe para frente</div>
+        <div class="capture-tip">Mantenha o rosto parado</div>
+        <div class="capture-tip">Evite luz atrás de você</div>
+      </div>
+      <div class="camera-actions">
+        <button id="startCameraBtn" class="btn btn-outline-primary big" disabled>Abrir câmera</button>
+        <button id="captureBtn" class="btn btn-primary big" disabled>Capturar agora</button>
+        <button id="stopCameraBtn" class="btn btn-outline-secondary big" disabled>Fechar câmera</button>
+      </div>
+      <div id="faceDecision" class="mt-4 h5 status muted">Documento ainda não liberou a etapa de câmera.</div>
+      <pre id="faceResult" class="result mt-3">Aguardando captura ao vivo…</pre>
+      <div id="biometricDetails" class="biometric-details mt-3" hidden><h3 class="h5 fw-bold">Resultado biométrico</h3><dl><dt>Provider</dt><dd id="metricProvider">—</dd><dt>Modelo</dt><dd id="metricModel">—</dd><dt>Versão</dt><dd id="metricModelVersion">—</dd><dt>Métrica</dt><dd id="metricName">—</dd><dt>Similaridade</dt><dd id="metricSimilarity">—</dd><dt>Review threshold</dt><dd id="metricReviewThreshold">—</dd><dt>Match threshold</dt><dd id="metricMatchThreshold">—</dd><dt>Processamento</dt><dd id="metricProcessingMs">—</dd><dt>Embedding documento</dt><dd id="metricDocumentMs">—</dd><dt>Embedding webcam</dt><dd id="metricLiveMs">—</dd><dt>Similaridade</dt><dd id="metricSimilarityMs">—</dd></dl></div>
 
-          <div id="biometricDetails" hidden>
-            <h3 style="margin-top:22px">Detalhes biométricos</h3>
-            <div class="metrics-grid">
-              <div class="metric"><strong>Provider</strong><span id="metricProvider">—</span></div>
-              <div class="metric"><strong>Modelo</strong><span id="metricModel">—</span></div>
-              <div class="metric"><strong>Versão</strong><span id="metricModelVersion">—</span></div>
-              <div class="metric"><strong>Métrica</strong><span id="metricName">—</span></div>
-              <div class="metric"><strong>Similaridade</strong><span id="metricSimilarity">—</span></div>
-              <div class="metric"><strong>Threshold review</strong><span id="metricReviewThreshold">—</span></div>
-              <div class="metric"><strong>Threshold match</strong><span id="metricMatchThreshold">—</span></div>
-              <div class="metric"><strong>Processamento</strong><span id="metricProcessingMs">—</span></div>
-              <div class="metric"><strong>Embedding documento</strong><span id="metricDocumentMs">—</span></div>
-              <div class="metric"><strong>Embedding webcam</strong><span id="metricLiveMs">—</span></div>
-              <div class="metric"><strong>Similaridade</strong><span id="metricSimilarityMs">—</span></div>
+      <div id="faceComparison" class="face-comparison mt-4" hidden>
+        <h3 class="h4 fw-bold mb-2">Rostos detectados</h3>
+        <p class="muted mb-3">Visualização lado a lado dos recortes feitos a partir das caixas detectadas pelo OpenCV. Esta visualização não realiza nem representa uma decisão biométrica de identidade.</p>
+        <div class="face-comparison-grid">
+          <div class="face-snapshot">
+            <div class="face-snapshot-title">Foto do documento</div>
+            <div class="face-snapshot-frame">
+              <img id="documentFaceImg" alt="Rosto detectado no documento" hidden>
+              <div id="documentFacePlaceholder" class="face-snapshot-placeholder">Aguardando rosto do documento.</div>
             </div>
+            <div id="documentFaceMeta" class="face-snapshot-meta">Aguardando detecção no documento.</div>
           </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="faceComparison" class="test-card" hidden>
-      <h2>Visualização lado a lado dos recortes feitos a partir das caixas detectadas pelo OpenCV</h2>
-      <p class="muted">Esta visualização é auxiliar para homologação e não representa uma decisão biométrica de identidade.</p>
-      <div class="face-comparison-grid">
-        <div class="face-snapshot">
-          <h3>Foto do documento</h3>
-          <div class="face-snapshot-stage"><img id="documentFaceImg" alt="Rosto detectado no documento" hidden><div id="documentFacePlaceholder" class="face-snapshot-placeholder">Aguardando detecção no documento.</div></div>
-          <div id="documentFaceMeta" class="face-snapshot-meta">Aguardando detecção no documento.</div>
-        </div>
-        <div class="face-snapshot">
-          <h3>Documento alinhado</h3>
-          <div class="face-snapshot-stage"><img id="documentAlignedImg" alt="Face do documento alinhada" hidden><div id="documentAlignedPlaceholder" class="face-snapshot-placeholder">Aguardando alinhamento do documento.</div></div>
-          <div id="documentAlignedMeta" class="face-snapshot-meta">Aguardando resposta do Face Scanner.</div>
-        </div>
-        <div class="face-snapshot">
-          <h3>Webcam alinhada</h3>
-          <div class="face-snapshot-stage"><img id="liveAlignedImg" alt="Face da webcam alinhada" hidden><div id="liveAlignedPlaceholder" class="face-snapshot-placeholder">Aguardando alinhamento da webcam.</div></div>
-          <div id="liveAlignedMeta" class="face-snapshot-meta">Aguardando resposta do Face Scanner.</div>
-        </div>
-        <div class="face-snapshot">
-          <h3>Foto da webcam</h3>
-          <div class="face-snapshot-stage"><img id="liveFaceImg" alt="Rosto detectado na webcam" hidden><div id="liveFacePlaceholder" class="face-snapshot-placeholder">Aguardando captura da webcam.</div></div>
-          <div id="liveFaceMeta" class="face-snapshot-meta">Aguardando captura da webcam.</div>
+          <div class="face-snapshot"><div class="face-snapshot-title">Documento alinhado</div><div class="face-snapshot-frame"><img id="documentAlignedImg" alt="Face do documento alinhada" hidden><div id="documentAlignedPlaceholder" class="face-snapshot-placeholder">Aguardando alinhamento do documento.</div></div><div id="documentAlignedMeta" class="face-snapshot-meta">Aguardando resposta do Face Scanner.</div></div>
+          <div class="face-snapshot"><div class="face-snapshot-title">Webcam alinhada</div><div class="face-snapshot-frame"><img id="liveAlignedImg" alt="Face da webcam alinhada" hidden><div id="liveAlignedPlaceholder" class="face-snapshot-placeholder">Aguardando alinhamento da webcam.</div></div><div id="liveAlignedMeta" class="face-snapshot-meta">Aguardando resposta do Face Scanner.</div></div>
+          <div class="face-snapshot">
+            <div class="face-snapshot-title">Foto da webcam</div>
+            <div class="face-snapshot-frame">
+              <img id="liveFaceImg" alt="Rosto detectado na webcam" hidden>
+              <div id="liveFacePlaceholder" class="face-snapshot-placeholder">Aguardando captura da webcam.</div>
+            </div>
+            <div id="liveFaceMeta" class="face-snapshot-meta">Aguardando captura da webcam.</div>
+          </div>
         </div>
       </div>
     </section>
@@ -166,7 +123,7 @@
   <script src="/base-path.js?v=face-test-subpath-20260909"></script>
   <script src="/face-capture-helper.js?v=face-capture-r5-20260908"></script>
   <script src="/face-scanner-test.js?v=face-verification-real-0.5.0-20260908"></script>
-  <script src="/face-aligned-preview-fix.js?v=aligned-image-r2-20260909"></script>
+  <script src="/face-aligned-preview-fix.js?v=aligned-blob-r1-20260909"></script>
   <script src="/face-test-mode.js?v=mock-homologation-20260908-1"></script>
 </body>
 </html>
