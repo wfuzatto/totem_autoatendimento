@@ -340,11 +340,14 @@ async function captureAndSend(source = 'manual') {
     if (result.status === 'review') {
       $('faceDecision').className = 'mt-4 h5 status warn';
       if (result.retry_allowed === true) {
-        $('faceDecision').textContent = `REVISÃO DE QUALIDADE · ${reviewInstruction(result)}`;
+        const label = result.provider && result.provider !== 'not_run'
+          ? 'REVISÃO BIOMÉTRICA'
+          : 'REVISÃO DE QUALIDADE';
+        $('faceDecision').textContent = `${label} · ${reviewInstruction(result)}`;
         $('captureBtn').disabled = false;
         captureGuide?.setPaused(false);
       } else {
-        $('faceDecision').textContent = 'REVISÃO MANUAL NECESSÁRIA · esta tentativa foi encerrada e não pode ser repetida com a mesma sessão.';
+        $('faceDecision').textContent = result.message || 'REVISÃO MANUAL NECESSÁRIA · limite de tentativas atingido; solicite atendimento da recepção.';
         stopCamera();
         verificationId = null;
       }
@@ -354,9 +357,15 @@ async function captureAndSend(source = 'manual') {
 
     if (result.status === 'mismatch') {
       $('faceDecision').className = 'mt-4 h5 status bad';
-      $('faceDecision').textContent = 'IDENTIDADE NÃO CONFERE · a verificação biométrica não confirmou a pessoa capturada.';
-      stopCamera();
-      verificationId = null;
+      if (result.retry_allowed === true) {
+        $('faceDecision').textContent = `IDENTIDADE NÃO CONFERE · ${result.message || 'Refaça a captura.'}`;
+        $('captureBtn').disabled = false;
+        captureGuide?.setPaused(false);
+      } else {
+        $('faceDecision').textContent = `IDENTIDADE NÃO CONFERE · ${result.message || 'Limite de tentativas atingido; solicite atendimento da recepção.'}`;
+        stopCamera();
+        verificationId = null;
+      }
       captureInProgress = false;
       return;
     }
