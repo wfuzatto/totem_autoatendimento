@@ -19,6 +19,18 @@ ARG PUBLIC_BASE_PATH=/totem
 ENV PUBLIC_BASE_PATH=${PUBLIC_BASE_PATH}
 WORKDIR /app
 
+# Tudo que o backend precisa fica dentro da imagem. Tesseract/Poppler sustentam
+# a validação documental e a conversão de PDF antes de enviar a face do
+# documento ao serviço face_scanner; o host não precisa instalar esses pacotes.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+       ca-certificates \
+       tesseract-ocr \
+       tesseract-ocr-por \
+       tesseract-ocr-eng \
+       poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY package.json ./
 COPY src ./src
