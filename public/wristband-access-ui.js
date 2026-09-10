@@ -63,6 +63,18 @@
     const scanBox = app?.querySelector('.scan-box');
     if (!scanBox) return;
 
+    const room = String(context?.room_number || '').trim();
+    const blockers = Array.isArray(context?.blockers) ? context.blockers : [];
+    const roomMissing = blockers.some(item => item?.code === 'room_missing') || !room;
+    const ready = Boolean(context?.ready_for_wristband);
+    const signature = JSON.stringify({
+      room,
+      ready,
+      checkin: context?.checkin_date || '',
+      checkout: context?.checkout_date || '',
+      blockers: blockers.map(item => item?.code || '')
+    });
+
     let panel = document.getElementById('wristbandAccessContext');
     if (!panel) {
       panel = document.createElement('div');
@@ -70,24 +82,22 @@
       scanBox.parentNode.insertBefore(panel, scanBox);
     }
 
-    const room = String(context?.room_number || '').trim();
-    const blockers = Array.isArray(context?.blockers) ? context.blockers : [];
-    const roomMissing = blockers.some(item => item?.code === 'room_missing') || !room;
-    const ready = Boolean(context?.ready_for_wristband);
-
-    panel.className = `wristband-access-context${ready ? '' : ' blocked'}`;
-    panel.innerHTML = roomMissing
-      ? `
-        <div class="wristband-access-head">
-          <div class="wristband-access-room"><i class="bi bi-door-closed"></i><div><div class="small text-uppercase fw-bold">UH</div><strong>Aguardando PMS</strong></div></div>
-        </div>
-        <p class="wristband-access-note"><strong>Gravação bloqueada.</strong> A reserva precisa ter uma UH atribuída pelo PMS antes de qualquer pulseira receber acesso.</p>`
-      : `
-        <div class="wristband-access-head">
-          <div class="wristband-access-room"><i class="bi bi-door-open"></i><div><div class="small text-uppercase fw-bold">UH liberada para a pulseira</div><strong>${escapeHtml(room)}</strong></div></div>
-          <div class="wristband-access-validity"><i class="bi bi-calendar-check me-2"></i>${formatDate(context.checkin_date)} → ${formatDate(context.checkout_date)}</div>
-        </div>
-        <p class="wristband-access-note">A pulseira será vinculada à <strong>UH ${escapeHtml(room)}</strong> e ao período desta hospedagem. O Totem não cria nem altera a UH durante a gravação.</p>`;
+    if (panel.dataset.signature !== signature) {
+      panel.dataset.signature = signature;
+      panel.className = `wristband-access-context${ready ? '' : ' blocked'}`;
+      panel.innerHTML = roomMissing
+        ? `
+          <div class="wristband-access-head">
+            <div class="wristband-access-room"><i class="bi bi-door-closed"></i><div><div class="small text-uppercase fw-bold">UH</div><strong>Aguardando PMS</strong></div></div>
+          </div>
+          <p class="wristband-access-note"><strong>Gravação bloqueada.</strong> A reserva precisa ter uma UH atribuída pelo PMS antes de qualquer pulseira receber acesso.</p>`
+        : `
+          <div class="wristband-access-head">
+            <div class="wristband-access-room"><i class="bi bi-door-open"></i><div><div class="small text-uppercase fw-bold">UH liberada para a pulseira</div><strong>${escapeHtml(room)}</strong></div></div>
+            <div class="wristband-access-validity"><i class="bi bi-calendar-check me-2"></i>${formatDate(context.checkin_date)} → ${formatDate(context.checkout_date)}</div>
+          </div>
+          <p class="wristband-access-note">A pulseira será vinculada à <strong>UH ${escapeHtml(room)}</strong> e ao período desta hospedagem. O Totem não cria nem altera a UH durante a gravação.</p>`;
+    }
 
     const encodeButton = document.getElementById('encodeBand');
     if (encodeButton) {
