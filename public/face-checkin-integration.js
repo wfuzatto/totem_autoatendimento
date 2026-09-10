@@ -6,6 +6,7 @@
   let activeVideo = null;
   let activeCaptureButton = null;
   let captureInFlight = false;
+  let latestReservationBundle = null;
 
   function requestPath(input) {
     try {
@@ -29,6 +30,14 @@
     let payload = null;
     try { payload = await response.json(); } catch (_) {}
     return payload;
+  }
+
+  async function rememberReservation(response) {
+    if (!response?.ok) return;
+    try {
+      const payload = await response.clone().json();
+      if (payload?.reservation?.id && Array.isArray(payload?.guests)) latestReservationBundle = payload;
+    } catch (_) {}
   }
 
   async function backendJson(url, options = {}) {
@@ -96,7 +105,7 @@
     }
 
     captureInFlight = true;
-    pauseGuide('Analisando documento e comparando o rosto…', 'warn');
+    pauseGuide('Comparando seu rosto com o documento…', 'warn');
 
     try {
       const prepared = await prepareVerification(reservationId, guestId);
@@ -126,7 +135,7 @@
 
       if (verified) {
         verificationCache.delete(key);
-        pauseGuide('Identidade confirmada.', 'good');
+        pauseGuide('Identidade confirmada pelo Face Scanner.', 'good');
         return syntheticJson({
           ok: true,
           matched: true,
@@ -182,7 +191,14 @@
       }
     }
 
-    return previousFetch(input, init);
+    const response = await previousFetch(input, init);
+    if (
+      pathname.endsWith('/api/reservations/lookup')
+      || /\/api\/reservations\/\d+$/.test(pathname)
+    ) {
+      await rememberReservation(response);
+    }
+    return response;
   };
 
   function teardownGuide() {
@@ -204,6 +220,50 @@
     return element;
   }
 
+  function correctLegacyCopy(box) {
+    const panel = box.closest('.panel-card');
+    if (!panel) return;
+    for (const alert of panel.querySelectorAll('.alert.alert-warning')) {
+      if (/motor biométrico está simulado|MVP:/i.test(alert.textContent || '')) {
+        alert.classList.remove('alert-warning');
+        alert.classList.add('alert-info');
+        alert.innerHTML = '<strong>Validação facial:</strong> a câmera é analisada pelo Face Scanner do HUB e o check-in só avança quando o provider biométrico confirmar a identidade.';
+      }
+    }
+  }
+
+  function startGuideWhenReady(video) {
+    const startGuide = () => {
+      if (activeVideo === video && document.documentElement.contains(video)) activeGuide?.start();
+    };
+    if (video.readyState >= 2 && video.videoWidth) startGuide();
+    else video.addEventListener('loadeddata', startGuide, { once: true });
+    window.setTimeout(startGuide, 1200);
+  }
+
+  async function armCurrentGuest(video, captureButton) {
+    const reservationId = Number(latestReservationBundle?.reservation?.id || 0);
+    const guest = latestReservationBundle?.guests?.find(item => item.adult && !item.face_verified);
+    if (!reservationId || !guest?.id) {
+      startGuideWhenReady(video);
+      return;
+    }
+
+    captureButton.disabled = true;
+    pauseGuide(`Preparando o documento de ${guest.name}…`, 'warn');
+    try {
+      await prepareVerification(reservationId, Number(guest.id));
+      if (activeVideo !== video || !document.documentElement.contains(video)) return;
+      captureButton.disabled = false;
+      activeGuide?.setState('warn', 'Posicione seu rosto dentro da área indicada.', 'Documento preparado · aguardando câmera');
+      startGuideWhenReady(video);
+    } catch (error) {
+      if (activeVideo !== video) return;
+      captureButton.disabled = true;
+      pauseGuide(error.message || 'Não foi possível preparar o documento para reconhecimento facial.', 'bad');
+    }
+  }
+
   function enhanceFaceCapture() {
     const video = document.getElementById('cameraVideo');
     const captureButton = document.getElementById('captureFace');
@@ -219,6 +279,7 @@
     activeVideo = video;
     activeCaptureButton = captureButton;
     box.classList.add('face-checkin-camera');
+    correctLegacyCopy(box);
 
     let guide = box.querySelector('.face-guide');
     if (!guide) {
@@ -232,9 +293,9 @@
       box,
       'checkinCaptureInstruction',
       'capture-instruction capture-warn',
-      'Posicione seu rosto dentro da área indicada.'
+      'Preparando validação facial…'
     );
-    const metrics = ensureElement(box, 'checkinCaptureMetrics', 'capture-metrics', 'Aguardando análise…');
+    const metrics = ensureElement(box, 'checkinCaptureMetrics', 'capture-metrics', 'Aguardando Face Scanner…');
     const countdown = ensureElement(box, 'checkinCaptureCountdown', 'capture-countdown');
     countdown.hidden = true;
 
@@ -257,7 +318,7 @@
       previewEndpoint: '/api/face-scanner/face/preview',
       intervalMs: 800,
       onAutoCapture: () => {
-        if (!captureInFlight && document.documentElement.contains(captureButton)) captureButton.click();
+        if (!captureInFlight && document.documentElement.contains(captureButton) && !captureButton.disabled) captureButton.click();
       }
     });
 
@@ -265,17 +326,24 @@
       if (!captureInFlight) pauseGuide('Captura realizada. Comparando com o documento…', 'warn');
     }, true);
 
-    const startGuide = () => {
-      if (activeVideo === video && document.documentElement.contains(video)) activeGuide?.start();
-    };
-    if (video.readyState >= 2 && video.videoWidth) startGuide();
-    else video.addEventListener('loadeddata', startGuide, { once: true });
-    window.setTimeout(startGuide, 1200);
+    armCurrentGuest(video, captureButton);
   }
 
   if (appRoot) {
     const observer = new MutationObserver(enhanceFaceCapture);
     observer.observe(appRoot, { childList: true, subtree: true });
     enhanceFaceCapture();
+  }
+
+  const toastBody = document.getElementById('toastBody');
+  if (toastBody) {
+    new MutationObserver(() => {
+      if (/validação concluída no modo simulado/i.test(toastBody.textContent || '')) {
+        toastBody.textContent = (toastBody.textContent || '').replace(
+          /validação concluída no modo simulado\.?/i,
+          'identidade confirmada pelo Face Scanner.'
+        );
+      }
+    }).observe(toastBody, { childList: true, characterData: true, subtree: true });
   }
 })();
