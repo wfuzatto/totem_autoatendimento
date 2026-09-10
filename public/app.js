@@ -104,7 +104,7 @@
       <button class="choice-card" id="checkinChoice">
         <i class="bi bi-door-open big-icon"></i>
         <h2>Fazer check-in</h2>
-        <p>Confirme sua reserva, documentos, pulseiras e pagamento.</p>
+        <p>Confirme sua reserva, documentos, pagamento e pulseiras.</p>
       </button>
       <button class="choice-card" id="checkoutChoice">
         <i class="bi bi-box-arrow-right big-icon"></i>
@@ -248,7 +248,7 @@
   function paymentScreen(title, subtitle, amountCents, onFinished) {
     state.selectedPayment = null;
     app.innerHTML = `<section class="panel-card">
-      ${flowHeader(state.flow === 'checkout' ? 4 : 7, title, subtitle)}
+      ${flowHeader(state.flow === 'checkout' ? 4 : 6, title, subtitle)}
       <div class="total-bar"><span>Valor a pagar</span><strong>${fmtMoney(amountCents)}</strong></div>
       <div class="payment-grid">
         <button class="payment-option" data-payment="pix"><i class="bi bi-qr-code"></i>PIX</button>
@@ -383,10 +383,10 @@
   }
 
   function renderCheckinFace() {
-    if (!state.config.require_face_match) return renderCheckinWristbands();
+    if (!state.config.require_face_match) return renderCheckinPaymentGate();
     const adults = state.reservation.guests.filter(g => g.adult);
     const next = adults.find(g => !g.face_verified);
-    if (!next) { stopCamera(); return renderCheckinWristbands(); }
+    if (!next) { stopCamera(); return renderCheckinPaymentGate(); }
     app.innerHTML = `<section class="panel-card">
       ${flowHeader(5, 'Validação facial', `Posicione ${next.name} em frente à câmera para comparar o rosto com o documento enviado.`)}
       <div class="camera-box"><video id="cameraVideo" autoplay playsinline muted></video><canvas id="cameraCanvas" class="d-none"></canvas><div class="face-guide"></div></div>
@@ -414,12 +414,25 @@
     };
   }
 
+  async function renderCheckinPaymentGate() {
+    stopCamera();
+    const id = state.reservation.reservation.id;
+    try {
+      state.reservation = await api(`/api/reservations/${id}`);
+    } catch(e) {
+      return notify(e.message, true);
+    }
+    const reservation = state.reservation.reservation;
+    if (reservation.payment_pending || Number(reservation.balance_cents || 0) > 0) return renderCheckinPayment();
+    return renderCheckinWristbands();
+  }
+
   function renderCheckinWristbands() {
     stopCamera();
     const adults = state.reservation.guests.filter(g => g.adult);
     const next = adults.find(g => !g.wristband_code);
     app.innerHTML = `<section class="panel-card">
-      ${flowHeader(6, 'Grave as pulseiras', `Será gravada uma pulseira NFC para cada hóspede adulto (${adults.length}).`)}
+      ${flowHeader(7, 'Grave as pulseiras', `Pagamento confirmado. Agora será gravada uma pulseira NFC para cada hóspede adulto (${adults.length}).`)}
       <div class="scan-box"><i class="bi bi-wifi scan-icon"></i><h2 class="h4 fw-bold mt-3">${next ? `Aproxime a pulseira de ${esc(next.name)}` : 'Todas as pulseiras foram gravadas'}</h2><p class="text-secondary">Leitor/gravador previsto: ACS ACR122U.</p>${next ? '<button class="btn btn-primary btn-touch mt-3" id="encodeBand"><i class="bi bi-broadcast me-2"></i>Gravar pulseira</button>' : '<span class="status-pill status-ok mt-2"><i class="bi bi-check-circle"></i>Concluído</span>'}</div>
       <div class="wristband-list">${adults.map((g,i) => `<div class="wristband-item"><span><strong>Pulseira ${i+1}</strong> · ${esc(g.name)}</span>${g.wristband_code ? `<span class="status-pill status-ok">Gravada</span>` : `<span class="status-pill status-pending">Aguardando</span>`}</div>`).join('')}</div>
       ${actions({ onAdvance:'bands-encoded', advanceLabel:'Avançar', advanceDisabled:!!next })}
@@ -434,14 +447,11 @@
       } catch(e) { notify(e.message,true); }
     };
     const adv = document.querySelector('[data-action="bands-encoded"]');
-    if (adv) adv.onclick = () => {
-      if (state.reservation.reservation.payment_pending) renderCheckinPayment();
-      else finishCheckin();
-    };
+    if (adv) adv.onclick = finishCheckin;
   }
 
   function renderCheckinPayment() {
-    paymentScreen('Pagamento pendente', 'Há um saldo pendente na reserva. Escolha a forma de pagamento para continuar.', state.reservation.reservation.balance_cents, finishCheckin);
+    paymentScreen('Pagamento pendente', 'Há um saldo pendente na reserva. O pagamento precisa ser aprovado antes da gravação das pulseiras.', state.reservation.reservation.balance_cents, renderCheckinPaymentGate);
   }
 
   async function finishCheckin() {
