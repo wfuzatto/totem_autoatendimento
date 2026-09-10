@@ -105,6 +105,10 @@ function adultWristbandsEncoded(id) {
   return Number(row.total || 0) === Number(row.encoded || 0);
 }
 
+function hasOutstandingPayment(reservation) {
+  return Boolean(reservation?.payment_pending) || money(reservation?.balance_cents) > 0;
+}
+
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'totem-autoatendimento', time: new Date().toISOString() }));
 
 app.get('/api/config', (_req, res) => {
@@ -264,6 +268,12 @@ app.post('/api/reservations/:id/face/verify', (req, res) => {
 
 app.post('/api/reservations/:id/wristbands/encode', (req, res) => {
   const id = Number(req.params.id);
+  const reservation = normalizeReservation(db.prepare('SELECT * FROM reservations WHERE id=?').get(id));
+  if (!reservation) return res.status(404).json({ error: 'Reserva não encontrada.' });
+  if (hasOutstandingPayment(reservation)) {
+    audit('wristband.encode.blocked_payment', id, { balance_cents: reservation.balance_cents });
+    return res.status(409).json({ error: 'Existe pagamento pendente. Quite o saldo antes de gravar qualquer pulseira.' });
+  }
   const guestId = Number(req.body.guest_id);
   const guest = db.prepare('SELECT * FROM guests WHERE id=? AND reservation_id=? AND adult=1').get(guestId, id);
   if (!guest) return res.status(404).json({ error: 'Hóspede adulto não encontrado.' });
@@ -295,8 +305,8 @@ app.post('/api/reservations/:id/checkin', (req, res) => {
   if (!docsComplete(id)) return res.status(409).json({ error: 'Ainda existem documentos pendentes.' });
   if (boolSetting('require_govbr') && !bundle.state.govbr_verified) return res.status(409).json({ error: 'Autenticação gov.br ainda não concluída.' });
   if (boolSetting('require_face_match') && bundle.guests.filter(g => g.adult).some(g => !g.face_verified)) return res.status(409).json({ error: 'Validação facial pendente.' });
+  if (hasOutstandingPayment(bundle.reservation)) return res.status(409).json({ error: 'Existe pagamento pendente. Quite o saldo antes de liberar as pulseiras.' });
   if (!adultWristbandsEncoded(id)) return res.status(409).json({ error: 'Grave todas as pulseiras dos hóspedes adultos.' });
-  if (bundle.reservation.payment_pending) return res.status(409).json({ error: 'Existe pagamento pendente.' });
   const room = bundle.reservation.room_number || String(100 + id);
   db.prepare("UPDATE reservations SET status='checked_in', room_number=? WHERE id=?").run(room, id);
   audit('checkin.completed', id, { room });
