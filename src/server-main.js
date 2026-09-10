@@ -9,6 +9,7 @@ const { db, audit } = require('./db');
 const { installCheckoutRuntime } = require('./checkout-runtime');
 const { installDocumentRemovalRuntime } = require('./document-removal-runtime');
 const { installFaceScannerRuntime } = require('./face-scanner-runtime');
+const { installAccessControlRuntime } = require('./access-control-runtime');
 
 installCheckoutRuntime(runtimeApp);
 installDocumentRemovalRuntime(runtimeApp);
@@ -119,6 +120,12 @@ async function createUploadToken(req, res) {
 // navegador recebem novamente o prefixo indicado por X-Forwarded-Prefix.
 const app = express();
 app.use(forwardedPrefixResponses);
+
+// Rotas críticas de acesso físico ficam no wrapper oficial para substituir o
+// comportamento legado: pagamento, documentos, biometria e UH do PMS precisam
+// estar válidos antes de qualquer gravação de pulseira.
+installAccessControlRuntime(app);
+
 app.post('/api/reservations/:id/upload-token', express.json(), (req, res, next) => {
   createUploadToken(req, res).catch(next);
 });
