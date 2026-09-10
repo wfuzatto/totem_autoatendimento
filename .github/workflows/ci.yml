@@ -16,3 +16,8 @@ jobs:
           node-version: 20
       - run: npm install
       - run: npm test
+      - name: Build Docker image
+        run: docker build -t totem-autoatendimento:ci .
+      - name: Validate bundled document tools
+        run: |
+          docker run --rm --entrypoint sh totem-autoatendimento:ci -lc 'command -v tesseract && command -v pdftoppm && tesseract --list-langs | grep -qx por && tesseract --list-langs | grep -qx eng'
