@@ -1,0 +1,139 @@
+.face-checkin-camera {
+  max-width: 620px;
+  overflow: hidden;
+}
+
+.face-checkin-camera video {
+  transform: scaleX(-1);
+}
+
+.face-checkin-camera .face-guide {
+  position: absolute;
+  left: 50%;
+  top: 49%;
+  width: 42%;
+  height: 64%;
+  inset: auto;
+  transform: translate(-50%, -50%);
+  border: 4px solid #f2c94c;
+  border-radius: 48% 48% 44% 44%;
+  box-shadow: 0 0 0 9999px rgba(4, 12, 20, .35);
+  pointer-events: none;
+  transition: border-color .2s, box-shadow .2s;
+  z-index: 2;
+}
+
+.face-checkin-camera .guide-idle,
+.face-checkin-camera .guide-warn {
+  border-color: #f2c94c;
+}
+
+.face-checkin-camera .guide-bad {
+  border-color: #dc3545;
+  box-shadow: 0 0 0 9999px rgba(40, 0, 0, .32);
+}
+
+.face-checkin-camera .guide-good {
+  border-color: #28a745;
+  box-shadow: 0 0 0 9999px rgba(0, 30, 10, .22);
+}
+
+.face-checkin-camera .capture-instruction {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(90%, 560px);
+  z-index: 4;
+  padding: 10px 16px;
+  border-radius: 999px;
+  text-align: center;
+  font-weight: 800;
+  background: rgba(15, 26, 36, .88);
+  color: #fff;
+  backdrop-filter: blur(5px);
+}
+
+.face-checkin-camera .capture-bad {
+  background: rgba(160, 25, 25, .90);
+}
+
+.face-checkin-camera .capture-warn {
+  background: rgba(127, 91, 0, .90);
+}
+
+.face-checkin-camera .capture-good {
+  background: rgba(16, 112, 64, .92);
+}
+
+.face-checkin-camera .capture-metrics {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  background: rgba(15, 26, 36, .82);
+  color: #e9f2f8;
+  padding: 7px 13px;
+  border-radius: 999px;
+  font-size: .9rem;
+  white-space: nowrap;
+}
+
+.face-checkin-camera .capture-countdown {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  width: 116px;
+  height: 116px;
+  border-radius: 50%;
+  background: rgba(16, 112, 64, .92);
+  color: #fff;
+  align-items: center;
+  justify-content: center;
+  font-size: 4rem;
+  font-weight: 900;
+  box-shadow: 0 10px 35px rgba(0, 0, 0, .25);
+}
+
+.face-checkin-camera .capture-countdown:not([hidden]) {
+  display: flex;
+}
+
+.face-capture-tips {
+  max-width: 620px;
+  margin: -8px auto 18px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.face-capture-tips > div {
+  background: #f7fafc;
+  border: 1px solid #d8e1e8;
+  border-radius: 14px;
+  padding: 10px 12px;
+  text-align: center;
+  font-weight: 600;
+  color: #4e6473;
+}
+
+@media (max-width: 700px) {
+  .face-checkin-camera .face-guide {
+    width: 54%;
+    height: 62%;
+  }
+
+  .face-checkin-camera .capture-metrics {
+    font-size: .78rem;
+    max-width: 90%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .face-capture-tips {
+    grid-template-columns: 1fr;
+  }
+}
