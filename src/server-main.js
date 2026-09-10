@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const express = require('express');
 const QRCode = require('qrcode');
 const runtimeApp = require('./server-runtime');
-const { db } = require('./db');
+const { db, audit } = require('./db');
 const { installCheckoutRuntime } = require('./checkout-runtime');
 const { installDocumentRemovalRuntime } = require('./document-removal-runtime');
 const { installFaceScannerRuntime } = require('./face-scanner-runtime');
@@ -122,6 +122,18 @@ app.use(forwardedPrefixResponses);
 app.post('/api/reservations/:id/upload-token', express.json(), (req, res, next) => {
   createUploadToken(req, res).catch(next);
 });
+
+// Segurança fail-closed: a rota antiga aceitava uma captura e marcava
+// face_verified sem consultar o motor biométrico. No runtime Docker oficial ela
+// nunca pode ser usada. O navegador deve passar pelo adapter /api/face-scanner/*.
+app.post('/api/reservations/:id/face/verify', express.json({ limit: '12mb' }), (req, res) => {
+  const id = Number(req.params.id);
+  audit('face.legacy_endpoint.blocked', Number.isFinite(id) ? id : null);
+  return res.status(410).json({
+    error: 'Validação facial legada desativada. Use o motor Face Scanner integrado.'
+  });
+});
+
 app.use(runtimeApp);
 
 function start() {
