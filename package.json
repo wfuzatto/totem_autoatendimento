@@ -10,7 +10,7 @@
     "dev": "node --watch src/server-main.js",
     "kiosk": "electron .",
     "check": "node --check src/server-main.js && node --check src/payment-gateway.js && node --check src/payment-runtime.js",
-    "test": "node --test test/*.test.js"
+    "test": "NODE_ENV=test PAYMENT_ALLOW_LEGACY_MOCK=1 node --test test/*.test.js"
   },
   "engines": { "node": ">=20" },
   "dependencies": {
