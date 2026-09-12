@@ -54,7 +54,7 @@ test('real NFC contract, failures, locks and simulated credential migration', as
     db.prepare('DELETE FROM wristband_credentials WHERE reservation_id=?').run(id);
     db.prepare('UPDATE guests SET wristband_code=NULL WHERE reservation_id=?').run(id);
     db.prepare("UPDATE reservations SET payment_pending=0,balance_cents=0,room_number='125' WHERE id=?").run(id);
-    await card(); present = true;
+    await card(); await card(); present = true;
   }
   await t.test('hardware reasons and only explicit no-card means removal', async () => {
     await reset();
