@@ -181,6 +181,7 @@ test('Totem grava pulseira pelo bis_api e só persiste UID após confirmação r
   encodeMode = 'failure';
   cardPresent = false;
   await request(app).get('/api/access-control/card-status');
+  await request(app).get('/api/access-control/card-status');
   cardPresent = true;
   // Isolate upstream failure from the separate duplicate-UID protection.
   db.prepare("UPDATE wristband_credentials SET wristband_code='11223344' WHERE guest_id=?").run(adults[0].id);
