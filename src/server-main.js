@@ -10,6 +10,7 @@ const { installCheckoutRuntime } = require('./checkout-runtime');
 const { installDocumentRemovalRuntime } = require('./document-removal-runtime');
 const { installFaceScannerRuntime } = require('./face-scanner-runtime');
 const { installAccessControlRuntime } = require('./access-control-runtime');
+const { installPaymentRuntime } = require('./payment-runtime');
 
 installCheckoutRuntime(runtimeApp);
 installDocumentRemovalRuntime(runtimeApp);
@@ -120,6 +121,10 @@ async function createUploadToken(req, res) {
 // navegador recebem novamente o prefixo indicado por X-Forwarded-Prefix.
 const app = express();
 app.use(forwardedPrefixResponses);
+
+// Em produção nenhum pagamento pode cair nas rotas legadas/mock. Esta rota é
+// instalada antes do runtime antigo e torna api_pagamento a autoridade única.
+installPaymentRuntime(app);
 
 // Rotas críticas de acesso físico ficam no wrapper oficial para substituir o
 // comportamento legado: pagamento, documentos, biometria e UH do PMS precisam
