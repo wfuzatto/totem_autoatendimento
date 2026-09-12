@@ -225,7 +225,7 @@
         <section class="lookup-option">
           <div class="lookup-option-title"><span class="lookup-number">2</span><div><strong>NÚMERO DA RESERVA</strong><small>Digite exatamente como aparece na confirmação</small></div></div>
           <label class="form-label fw-semibold" for="reservationLookupInput">Número da reserva</label>
-          <input id="reservationLookupInput" class="form-control touch-input text-uppercase" autocomplete="off" placeholder="Ex.: RES-20080">
+          <input id="reservationLookupInput" class="form-control touch-input text-uppercase" autocomplete="off" placeholder="Ex.: RES-20080" value="RES-20080">
           <div id="reservationLookupMessage" class="lookup-message"></div>
           <button id="reservationLookupBtn" class="btn btn-primary btn-touch w-100 mt-3">Buscar reserva <i class="bi bi-arrow-right ms-2"></i></button>
         </section>
