@@ -156,9 +156,12 @@ async function requestJson(path, options = {}) {
     if (!response.ok) {
       // Arbitrary upstream errors may echo the write challenge. Do not forward them.
       const writeFailure = path === '/api/hotel-card/encode' ? writeFailureDetails(data) : null;
-      const message = writeFailure
-        ? `O codec BIS confirmou que a gravação não foi concluída (código ${writeFailure.vendorResult}).`
-        : `Falha ao consultar ou gravar no BisApi (HTTP ${response.status}).`;
+      const hotelPasswordRejected = writeFailure?.vendorResult === 5;
+      const message = hotelPasswordRejected
+        ? 'Esta pulseira não autentica com o código deste hotel (BIS código 5). Retire-a e use outra pulseira já preparada para este hotel; repetir a mesma pulseira não resolverá.'
+        : writeFailure
+          ? `O codec BIS confirmou que a gravação não foi concluída (código ${writeFailure.vendorResult}).`
+          : `Falha ao consultar ou gravar no BisApi (HTTP ${response.status}).`;
       throw new BisApiError(message, {
         status: response.status >= 500 ? 502 : response.status,
         code: writeFailure ? 'bis_api_vendor_write_failed' : 'bis_api_http_error',
@@ -166,7 +169,8 @@ async function requestJson(path, options = {}) {
           code: data?.code,
           operation: data?.operation,
           httpStatus: response.status,
-          writeFailure
+          writeFailure,
+          cardReplacementRequired: hotelPasswordRejected
         }
       });
     }
@@ -281,6 +285,19 @@ async function readGuestCard() {
   };
 }
 
+async function cardKeyState() {
+  const result = await requestJson('/api/vendor/card-key-state');
+  return {
+    conclusive: (result?.conclusive ?? result?.Conclusive) === true,
+    state: readField(result, 'state', 'State'),
+    hotelVendorResult: Number(result?.hotelVendorResult ?? result?.HotelVendorResult),
+    factoryVendorResult: result?.factoryVendorResult ?? result?.FactoryVendorResult ?? null,
+    reader: readField(result, 'reader', 'Reader'),
+    uidHex: readField(result, 'uidHex', 'UidHex')?.toUpperCase() || null,
+    message: readField(result, 'message', 'Message')
+  };
+}
+
 function resultField(result, camel, pascal) {
   return result?.[camel] ?? result?.[pascal];
 }
@@ -351,5 +368,6 @@ module.exports = {
   readerStatus,
   cardStatus,
   readGuestCard,
+  cardKeyState,
   encodeHotelCard
 };
