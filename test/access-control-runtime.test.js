@@ -54,9 +54,9 @@ test('pulseira exige UH real e persiste contexto de acesso da reserva', async ()
   assert.equal(readyContext.status, 200);
   assert.equal(readyContext.body.ready_for_wristband, true);
   assert.equal(readyContext.body.room_number, '204');
-  assert.equal(readyContext.body.bis_api_contract.request_template.Room, '204');
-  assert.equal(readyContext.body.bis_api_contract.request_template.ValidFrom, null);
-  assert.equal(readyContext.body.bis_api_contract.request_template.ValidUntil, null);
+  assert.equal(readyContext.body.bis_api_contract.request_template.RoomOrDoorId, '204');
+  assert.equal(readyContext.body.bis_api_contract.request_template.ValidFrom, lookup.body.reservation.checkin_date);
+  assert.equal(readyContext.body.bis_api_contract.request_template.ValidUntil, lookup.body.reservation.checkout_date);
 
   for (let index = 0; index < adults.length; index += 1) {
     const encoded = await request(app)
