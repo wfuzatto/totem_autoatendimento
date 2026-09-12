@@ -1,4 +1,5 @@
 'use strict';
+const express = require('express');
 const { db, audit } = require('./db');
 const gateway = require('./payment-gateway');
 
@@ -44,7 +45,7 @@ async function waitForTerminal(row) {
 }
 
 function installPaymentRuntime(app) {
-  app.post('/api/reservations/:id/payment', async (req, res, next) => {
+  app.post('/api/reservations/:id/payment', express.json(), async (req, res, next) => {
     try {
       const reservationId = Number(req.params.id);
       const method = String(req.body?.method || 'pix').toLowerCase();
