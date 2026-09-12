@@ -5,6 +5,7 @@
   return function createWristbandFlow({ readCard, encode, onWritten, onState, active, guard }) {
     let inFlight = false;
     let failed = null;
+    const requiresCardReplacement = error => /BIS código 5|código deste hotel|código 5/i.test(String(error?.message || ''));
     return {
       retry({ force = false } = {}) { if (force || failed?.retryable !== false) failed = null; },
       async step() {
@@ -34,10 +35,20 @@
           }
           guard.removalReads = 0;
           if (guard.waitingRemoval) { onState('remove', 'Retire a pulseira do leitor.'); return; }
+
           if (failed) {
-            onState('error', failed.message, failed.retryable === true, '', failed.recoveryUid || '');
-            return;
+            // Código 5 do BIS é uma rejeição determinística da autenticação do
+            // cartão. Repetir o MESMO UID não pode resolver. Assim que uma
+            // pulseira fisicamente diferente é apresentada, limpamos apenas o
+            // erro local e deixamos o backend fazer a nova tentativa normal.
+            if (failed.rejectedUid && card.uidHex && card.uidHex !== failed.rejectedUid) {
+              failed = null;
+            } else {
+              onState('error', failed.message, failed.retryable === true, '', failed.recoveryUid || '');
+              return;
+            }
           }
+
           if (card.present !== true || !card.uidHex) throw new Error('Nenhuma pulseira detectada.');
           detectedUid = card.uidHex;
           onState('detected', 'Pulseira detectada.');
@@ -54,10 +65,12 @@
         } catch (error) {
           if (!active()) return;
           if (dispatched) {
+            const replaceCard = requiresCardReplacement(error);
             failed = {
               message: error.message,
-              retryable: error.retryable === true,
-              recoveryUid: error.code === 'write_uncertain' ? detectedUid : ''
+              retryable: replaceCard ? false : error.retryable === true,
+              recoveryUid: error.code === 'write_uncertain' ? detectedUid : '',
+              rejectedUid: replaceCard ? detectedUid : ''
             };
           }
           onState('error', error.message, dispatched && failed?.retryable === true, '', failed?.recoveryUid || '');
