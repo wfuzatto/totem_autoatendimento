@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const { db, getSetting, audit } = require('./db');
+const bisApi = require('./bis-api-client');
 
 function installAccessControlRuntime(app) {
   db.exec(`
@@ -29,6 +30,7 @@ function installAccessControlRuntime(app) {
   const boolSetting = key => getSetting(key) === '1';
   const money = value => Number(value || 0);
   const provider = () => String(process.env.HOTEL_CARD_PROVIDER || 'mock').trim().toLowerCase() || 'mock';
+  const encodingInFlight = new Set();
 
   function reservation(id) {
     const row = db.prepare('SELECT * FROM reservations WHERE id=?').get(id);
@@ -72,6 +74,11 @@ function installAccessControlRuntime(app) {
     return Number(row?.total || 0) === Number(row?.encoded || 0);
   }
 
+  function providerBlockers(res) {
+    if (provider() !== 'bis_api') return [];
+    return bisApi.staticBlockers(res);
+  }
+
   function blockersFor(res) {
     const blockers = [];
     if (res.payment_pending || res.balance_cents > 0) {
@@ -92,31 +99,81 @@ function installAccessControlRuntime(app) {
     if (!res.checkin_date || !res.checkout_date) {
       blockers.push({ code: 'validity_missing', message: 'Período da hospedagem incompleto. Não é permitido gravar a pulseira sem validade.' });
     }
+    blockers.push(...providerBlockers(res));
     return blockers;
+  }
+
+  function resolvedWindow(res) {
+    if (provider() !== 'bis_api') return { validFrom: res.checkin_date || null, validUntil: res.checkout_date || null };
+    try { return bisApi.accessWindow(res); }
+    catch (_) { return { validFrom: null, validUntil: null }; }
   }
 
   function accessContext(res) {
     const blockers = blockersFor(res);
+    const window = resolvedWindow(res);
     return {
       reservation_id: res.id,
       reservation_number: res.reservation_number,
       room_number: res.room_number || null,
       checkin_date: res.checkin_date || null,
       checkout_date: res.checkout_date || null,
+      valid_from: window.validFrom,
+      valid_until: window.validUntil,
       provider: provider(),
       ready_for_wristband: blockers.length === 0,
       blockers,
+      bis_api: provider() === 'bis_api' ? {
+        configured: bisApi.staticBlockers(res).length === 0,
+        timeout_ms: bisApi.providerConfig().timeoutMs
+      } : null,
       bis_api_contract: {
         endpoint: '/api/hotel-card/encode',
         request_template: {
-          Room: res.room_number || null,
-          ValidFrom: null,
-          ValidUntil: null,
+          RoomOrDoorId: res.room_number || null,
+          ValidFrom: window.validFrom,
+          ValidUntil: window.validUntil,
+          Confirmation: '[server-side]',
           GuestName: null
-        },
-        note: 'ValidFrom/ValidUntil exigem DateTimeOffset exato. A integração PMS/BIS deverá fornecer os horários; o Totem não inventa horários de acesso.'
+        }
       }
     };
+  }
+
+  function upsertCredential({ current, guest, selectedProvider, status, code = null, externalReference = null, encodedAt = null, lastError = null, validFrom = null, validUntil = null }) {
+    db.prepare(`
+      INSERT INTO wristband_credentials(
+        reservation_id,guest_id,reservation_number,guest_name,room_number,
+        valid_from,valid_until,provider,status,wristband_code,external_reference,encoded_at,last_error,updated_at
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+      ON CONFLICT(reservation_id,guest_id) DO UPDATE SET
+        reservation_number=excluded.reservation_number,
+        guest_name=excluded.guest_name,
+        room_number=excluded.room_number,
+        valid_from=excluded.valid_from,
+        valid_until=excluded.valid_until,
+        provider=excluded.provider,
+        status=excluded.status,
+        wristband_code=COALESCE(excluded.wristband_code,wristband_credentials.wristband_code),
+        external_reference=COALESCE(excluded.external_reference,wristband_credentials.external_reference),
+        encoded_at=COALESCE(excluded.encoded_at,wristband_credentials.encoded_at),
+        last_error=excluded.last_error,
+        updated_at=CURRENT_TIMESTAMP
+    `).run(
+      current.id,
+      guest.id,
+      current.reservation_number,
+      guest.name,
+      current.room_number,
+      validFrom,
+      validUntil,
+      selectedProvider,
+      status,
+      code,
+      externalReference,
+      encodedAt,
+      lastError
+    );
   }
 
   app.get('/api/reservations/:id/access-context', (req, res) => {
@@ -126,7 +183,47 @@ function installAccessControlRuntime(app) {
     return res.json(accessContext(current));
   });
 
-  app.post('/api/reservations/:id/wristbands/encode', express.json({ limit: '1mb' }), (req, res) => {
+  app.get('/api/access-control/status', async (_req, res) => {
+    const selectedProvider = provider();
+    if (selectedProvider !== 'bis_api') {
+      return res.json({ ok: true, provider: selectedProvider, online: true, mock: selectedProvider === 'mock' });
+    }
+
+    const config = bisApi.providerConfig();
+    if (!config.url) {
+      return res.json({ ok: false, provider: selectedProvider, online: false, configured: false, error: 'BIS_API_URL não configurada.' });
+    }
+
+    try {
+      const health = await bisApi.health();
+      const vendor = health?.vendor || health?.Vendor || {};
+      return res.json({
+        ok: true,
+        provider: selectedProvider,
+        online: true,
+        configured: true,
+        service: health?.service || 'bis_api',
+        process_architecture: health?.processArchitecture || health?.ProcessArchitecture || null,
+        codec_present: Boolean(vendor?.codecPresent ?? vendor?.CodecPresent),
+        pcsc_shim_present: Boolean(vendor?.pcscShimPresent ?? vendor?.PcscShimPresent),
+        writes_enabled: Boolean(vendor?.hotelCardWritesEnabled ?? vendor?.HotelCardWritesEnabled),
+        hotel_password_configured: Boolean(vendor?.hotelPasswordConfigured ?? vendor?.HotelPasswordConfigured),
+        reader: vendor?.pcscReader || vendor?.PcscReader || null,
+        datetime_format: vendor?.dateTimeFormat || vendor?.DateTimeFormat || null
+      });
+    } catch (error) {
+      return res.json({
+        ok: false,
+        provider: selectedProvider,
+        online: false,
+        configured: true,
+        error: error.message,
+        code: error.code || 'bis_api_error'
+      });
+    }
+  });
+
+  app.post('/api/reservations/:id/wristbands/encode', express.json({ limit: '1mb' }), async (req, res) => {
     const id = Number(req.params.id);
     const current = reservation(id);
     if (!current) return res.status(404).json({ error: 'Reserva não encontrada.' });
@@ -141,78 +238,182 @@ function installAccessControlRuntime(app) {
     const guest = db.prepare('SELECT * FROM guests WHERE id=? AND reservation_id=? AND adult=1').get(guestId, id);
     if (!guest) return res.status(404).json({ error: 'Hóspede adulto não encontrado.' });
 
+    if (guest.wristband_code) {
+      return res.json({
+        ok: true,
+        already_encoded: true,
+        code: guest.wristband_code,
+        provider: provider(),
+        access: accessContext(current)
+      });
+    }
+
     const selectedProvider = provider();
-    if (selectedProvider !== 'mock') {
+    if (selectedProvider === 'mock') {
+      const code = String(req.body?.code || `TOTEM-${id}-${guestId}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`).trim();
+      const now = new Date().toISOString();
+      db.transaction(() => {
+        db.prepare('UPDATE guests SET wristband_code=? WHERE id=?').run(code, guestId);
+        upsertCredential({
+          current,
+          guest,
+          selectedProvider,
+          status: 'encoded_mock',
+          code,
+          externalReference: code,
+          encodedAt: now,
+          validFrom: current.checkin_date,
+          validUntil: current.checkout_date
+        });
+      })();
+      audit('wristband.encoded', id, { guest_id: guestId, provider: selectedProvider, room_number: current.room_number });
+      return res.json({
+        ok: true,
+        code,
+        provider: selectedProvider,
+        mode: 'mock',
+        mock: true,
+        access: {
+          room_number: current.room_number,
+          valid_from: current.checkin_date,
+          valid_until: current.checkout_date,
+          guest_name: guest.name,
+          reservation_number: current.reservation_number
+        }
+      });
+    }
+
+    if (selectedProvider !== 'bis_api') {
       audit('wristband.encode.provider_not_ready', id, { guest_id: guestId, provider: selectedProvider });
       return res.status(503).json({
-        error: `Provider de acesso "${selectedProvider}" ainda não está integrado. Nenhuma pulseira foi gravada.`,
+        error: `Provider de acesso "${selectedProvider}" não suportado. Nenhuma pulseira foi gravada.`,
         provider: selectedProvider,
         access: accessContext(current)
       });
     }
 
-    const code = String(req.body?.code || `TOTEM-${id}-${guestId}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`).trim();
-    const now = new Date().toISOString();
+    const lockKey = `${id}:${guestId}`;
+    if (encodingInFlight.has(lockKey)) {
+      return res.status(409).json({ error: 'Já existe uma gravação em andamento para este hóspede. Aguarde a conclusão.' });
+    }
+    encodingInFlight.add(lockKey);
 
-    db.transaction(() => {
-      db.prepare('UPDATE guests SET wristband_code=? WHERE id=?').run(code, guestId);
-      db.prepare(`
-        INSERT INTO wristband_credentials(
-          reservation_id,guest_id,reservation_number,guest_name,room_number,
-          valid_from,valid_until,provider,status,wristband_code,external_reference,encoded_at,last_error,updated_at
-        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
-        ON CONFLICT(reservation_id,guest_id) DO UPDATE SET
-          reservation_number=excluded.reservation_number,
-          guest_name=excluded.guest_name,
-          room_number=excluded.room_number,
-          valid_from=excluded.valid_from,
-          valid_until=excluded.valid_until,
-          provider=excluded.provider,
-          status=excluded.status,
-          wristband_code=excluded.wristband_code,
-          external_reference=excluded.external_reference,
-          encoded_at=excluded.encoded_at,
-          last_error=NULL,
-          updated_at=CURRENT_TIMESTAMP
-      `).run(
-        id,
-        guestId,
-        current.reservation_number,
-        guest.name,
-        current.room_number,
-        current.checkin_date,
-        current.checkout_date,
+    let window = { validFrom: null, validUntil: null };
+    try {
+      window = bisApi.accessWindow(current);
+      upsertCredential({
+        current,
+        guest,
         selectedProvider,
-        'encoded_mock',
-        code,
-        code,
-        now,
-        null
-      );
-    })();
-
-    audit('wristband.encoded', id, {
-      guest_id: guestId,
-      provider: selectedProvider,
-      room_number: current.room_number,
-      valid_from: current.checkin_date,
-      valid_until: current.checkout_date
-    });
-
-    return res.json({
-      ok: true,
-      code,
-      provider: selectedProvider,
-      mode: 'mock',
-      mock: true,
-      access: {
+        status: 'encoding',
+        validFrom: window.validFrom,
+        validUntil: window.validUntil
+      });
+      audit('wristband.encode.started', id, {
+        guest_id: guestId,
+        provider: selectedProvider,
         room_number: current.room_number,
-        valid_from: current.checkin_date,
-        valid_until: current.checkout_date,
-        guest_name: guest.name,
-        reservation_number: current.reservation_number
+        valid_from: window.validFrom,
+        valid_until: window.validUntil
+      });
+
+      const hardware = await bisApi.encodeHotelCard({ reservation: current, guest });
+      if (!hardware.uidHex) {
+        throw new bisApi.BisApiError('O bis_api confirmou a gravação, mas não retornou o UID do cartão.', {
+          status: 502,
+          code: 'bis_api_uid_missing',
+          details: hardware.raw
+        });
       }
-    });
+
+      const code = hardware.uidHex;
+      const now = new Date().toISOString();
+      const externalReference = JSON.stringify({
+        guest_serial: hardware.guestSerial,
+        holder_serial: hardware.holderSerial,
+        reader: hardware.reader,
+        door_id: hardware.doorId,
+        vendor_result: hardware.vendorResult
+      });
+
+      db.transaction(() => {
+        db.prepare('UPDATE guests SET wristband_code=? WHERE id=?').run(code, guestId);
+        upsertCredential({
+          current,
+          guest,
+          selectedProvider,
+          status: 'encoded',
+          code,
+          externalReference,
+          encodedAt: now,
+          validFrom: hardware.validFrom,
+          validUntil: hardware.validUntil,
+          lastError: null
+        });
+      })();
+
+      audit('wristband.encoded', id, {
+        guest_id: guestId,
+        provider: selectedProvider,
+        room_number: current.room_number,
+        uid: code,
+        reader: hardware.reader,
+        door_id: hardware.doorId,
+        guest_serial: hardware.guestSerial
+      });
+
+      return res.json({
+        ok: true,
+        code,
+        provider: selectedProvider,
+        mode: 'real',
+        mock: false,
+        message: hardware.message,
+        hardware: {
+          reader: hardware.reader,
+          uid: code,
+          door_id: hardware.doorId,
+          vendor_result: hardware.vendorResult,
+          guest_serial: hardware.guestSerial,
+          begin_time: hardware.beginTime,
+          end_time: hardware.endTime
+        },
+        access: {
+          room_number: current.room_number,
+          valid_from: hardware.validFrom,
+          valid_until: hardware.validUntil,
+          guest_name: guest.name,
+          reservation_number: current.reservation_number
+        }
+      });
+    } catch (error) {
+      const message = error?.message || 'Falha ao gravar pulseira no bis_api.';
+      upsertCredential({
+        current,
+        guest,
+        selectedProvider,
+        status: 'failed',
+        validFrom: window.validFrom,
+        validUntil: window.validUntil,
+        lastError: message
+      });
+      audit('wristband.encode.failed', id, {
+        guest_id: guestId,
+        provider: selectedProvider,
+        room_number: current.room_number,
+        error: message,
+        code: error?.code || null
+      });
+      return res.status(Number(error?.status || 502)).json({
+        error: message,
+        code: error?.code || 'bis_api_error',
+        provider: selectedProvider,
+        retryable: true,
+        access: accessContext(current)
+      });
+    } finally {
+      encodingInFlight.delete(lockKey);
+    }
   });
 
   app.post('/api/reservations/:id/checkin', express.json({ limit: '1mb' }), (req, res) => {
