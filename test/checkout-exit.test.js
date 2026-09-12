@@ -11,6 +11,10 @@ process.env.UPLOAD_DIR = path.join(temp, 'uploads');
 process.env.BRANDING_DIR = path.join(temp, 'branding');
 process.env.PRINT_JOB_DIR = path.join(temp, 'print-jobs');
 process.env.ADMIN_PASSWORD = '251933';
+// Esta suíte valida guia/QR/portaria, não o gateway central. O runtime possui
+// uma compatibilidade exclusiva de testes para manter esse fixture isolado.
+process.env.NODE_ENV = 'test';
+process.env.PAYMENT_ALLOW_LEGACY_MOCK = '1';
 
 const app = require('../src/server-main');
 
