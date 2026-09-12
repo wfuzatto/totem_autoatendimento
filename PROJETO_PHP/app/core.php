@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/qrcode.php';
+require_once __DIR__ . '/adapters.php';
 
 function cfg(?string $key = null): mixed
 {
@@ -62,6 +63,9 @@ function seed_defaults(PDO $pdo): void
         'payment_provider' => 'mock',
         'sitef_server' => '',
         'nfc_mode' => 'mock',
+        'bis_api_url' => 'http://127.0.0.1:8765',
+        'bis_api_reader' => 'ACS ACR122 0',
+        'bis_api_confirmation' => 'GRAVAR',
         'printer_mode' => 'mock',
         'webcam_mode' => 'browser',
         'inactivity_seconds' => '120',
@@ -134,12 +138,28 @@ function setting_bool(string $key, bool $fallback = false): bool
     return in_array((string)$value, ['1','true','yes','on'], true);
 }
 
+function nfc_bridge(): NfcBridge
+{
+    static $bridge = null;
+    if ($bridge instanceof NfcBridge) return $bridge;
+    if (setting('nfc_mode', 'mock') === 'pcsc') {
+        $bridge = new BisApiNfcBridge(
+            (string)setting('bis_api_url', 'http://127.0.0.1:8765'),
+            (string)setting('bis_api_reader', 'ACS ACR122 0'),
+            (string)setting('bis_api_confirmation', 'GRAVAR')
+        );
+    } else {
+        $bridge = new MockNfcBridge();
+    }
+    return $bridge;
+}
+
 function save_settings(array $values): void
 {
     $allowed = [
         'hotel_name','allow_item_contest','require_govbr','require_face_match','require_wristband_return',
         'enable_accessibility_toolbar','api_provider','totvs_base_url','totvs_token','payment_provider','sitef_server',
-        'nfc_mode','printer_mode','webcam_mode','inactivity_seconds','public_qr_base_url','govbr_hotel_url'
+        'nfc_mode','bis_api_url','bis_api_reader','bis_api_confirmation','printer_mode','webcam_mode','inactivity_seconds','public_qr_base_url','govbr_hotel_url'
     ];
     $stmt = db()->prepare('INSERT INTO settings(key,value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=CURRENT_TIMESTAMP');
     foreach ($values as $key => $value) {
@@ -432,7 +452,24 @@ function verify_govbr(int $reservationId): array
 
 function encode_wristband(int $reservationId,int $guestId,?string $code=null): array
 {
-    $code=$code?:'VM-'.str_pad((string)$reservationId,5,'0',STR_PAD_LEFT).'-'.strtoupper(bin2hex(random_bytes(3)));$s=db()->prepare('UPDATE guests SET wristband_code=? WHERE id=? AND reservation_id=? AND adult=1');$s->execute([$code,$guestId,$reservationId]);if(!$s->rowCount())throw new RuntimeException('Hóspede adulto não encontrado.');audit('wristband.encoded',$reservationId,['guest_id'=>$guestId,'mode'=>setting('nfc_mode','mock')]);return ['ok'=>true,'code'=>$code,'bundle'=>reservation_bundle($reservationId)];
+    $s=db()->prepare('SELECT g.*,r.room_number,r.checkout_date FROM guests g JOIN reservations r ON r.id=g.reservation_id WHERE g.id=? AND g.reservation_id=? AND g.adult=1');
+    $s->execute([$guestId,$reservationId]);$guest=$s->fetch();if(!$guest)throw new RuntimeException('Hóspede adulto não encontrado.');
+    $mode=(string)setting('nfc_mode','mock');
+    if($mode==='pcsc'){
+        $count=db()->prepare('SELECT COUNT(*) FROM guests WHERE reservation_id=? AND adult=1 AND id<=?');$count->execute([$reservationId,$guestId]);$guestIndex=max(1,(int)$count->fetchColumn());
+        $now=new DateTimeImmutable('now',new DateTimeZone((string)cfg('timezone')));
+        $end=$now->modify('+24 hours');
+        $checkout=(string)($guest['checkout_date']??'');
+        if($checkout!==''){
+            $candidate=new DateTimeImmutable($checkout.' 12:00:00',new DateTimeZone((string)cfg('timezone')));
+            if($candidate>$now)$end=$candidate;
+        }
+        $payload=json_encode(['roomOrDoorId'=>(string)($guest['room_number']??''),'validFrom'=>$now->format(DateTimeInterface::ATOM),'validUntil'=>$end->format(DateTimeInterface::ATOM),'guestIndex'=>$guestIndex],JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+        $code=nfc_bridge()->encode($reservationId,$guestId,$payload);
+    } else {
+        $code=$code?:'VM-'.str_pad((string)$reservationId,5,'0',STR_PAD_LEFT).'-'.strtoupper(bin2hex(random_bytes(3)));
+    }
+    $s=db()->prepare('UPDATE guests SET wristband_code=? WHERE id=? AND reservation_id=? AND adult=1');$s->execute([$code,$guestId,$reservationId]);if(!$s->rowCount())throw new RuntimeException('Hóspede adulto não encontrado.');audit('wristband.encoded',$reservationId,['guest_id'=>$guestId,'mode'=>$mode]);return ['ok'=>true,'code'=>$code,'bundle'=>reservation_bundle($reservationId)];
 }
 
 function register_payment(int $reservationId,string $method): array

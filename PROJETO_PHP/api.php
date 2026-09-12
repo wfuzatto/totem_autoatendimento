@@ -26,6 +26,7 @@ try {
                 'advertisement_url'=>branding_url('checkout_ad_filename'),
                 'govbr_qr_url'=>branding_url('govbr_qr_filename'),
                 'base_url'=>app_base_path(),
+                'nfc_mode'=>setting('nfc_mode','mock'),
             ]);
 
         case 'admin_login':
@@ -41,7 +42,7 @@ try {
 
         case 'settings_get':
             require_admin();
-            $keys=['hotel_name','allow_item_contest','require_govbr','require_face_match','require_wristband_return','enable_accessibility_toolbar','api_provider','totvs_base_url','totvs_token','payment_provider','sitef_server','nfc_mode','printer_mode','webcam_mode','inactivity_seconds','public_qr_base_url','govbr_hotel_url'];
+            $keys=['hotel_name','allow_item_contest','require_govbr','require_face_match','require_wristband_return','enable_accessibility_toolbar','api_provider','totvs_base_url','totvs_token','payment_provider','sitef_server','nfc_mode','bis_api_url','bis_api_reader','bis_api_confirmation','printer_mode','webcam_mode','inactivity_seconds','public_qr_base_url','govbr_hotel_url'];
             $out=[];foreach($keys as $k){$v=setting($k,'');if($k==='totvs_token'&&$v!=='')$v='********';$out[$k]=$v;}
             $out['logo_url']=branding_url('logo_filename') ?: app_url('assets/logo.php');
             $out['advertisement_url']=branding_url('checkout_ad_filename');
@@ -103,6 +104,9 @@ try {
 
         case 'wristband_encode':
             $id=(int)($data['reservation_id']??0);$guest=(int)($data['guest_id']??0);$code=clean_text($data['code']??'',100)?:null;json_response(encode_wristband($id,$guest,$code));
+
+        case 'wristband_reader_status':
+            json_response(nfc_bridge()->status());
 
         case 'payment':
             $id=(int)($data['reservation_id']??0);$methodName=(string)($data['method']??'pix');if(!in_array($methodName,['pix','debit','credit'],true))json_response(['error'=>'Forma de pagamento inválida.'],400);json_response(register_payment($id,$methodName));

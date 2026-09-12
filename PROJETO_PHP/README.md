@@ -39,6 +39,17 @@ O sistema continua funcionando sem estes componentes:
 - SiTef/TEF: Gertec real;
 - driver/bridge da impressora térmica.
 
+## Gravação automática de pulseiras pelo BisApi
+
+O módulo de pulseiras possui dois modos:
+
+- `mock`: mantém a simulação local;
+- `pcsc`: monitora o ACR122U através do `bis_api`, grava uma única vez por UID, valida a resposta, aguarda a retirada da pulseira e só então libera a próxima.
+
+Para o teste real, abra as configurações administrativas do totem e selecione **NFC: PC/SC**. O BisApi precisa estar disponível em `http://127.0.0.1:8765`, com o leitor `ACS ACR122 0` e a emissão explicitamente habilitada no próprio BisApi. O totem não altera essa habilitação e nunca grava diretamente blocos MIFARE.
+
+Se a mesma pulseira permanecer sobre o leitor, ela não será gravada novamente. Em caso de erro, o ciclo fica bloqueado até a retirada da pulseira.
+
 Sem esses componentes, os respectivos módulos permanecem em modo básico/mock. Eles não impedem check-in, check-out, reservas, dashboard, QR, upload, configurações ou banco.
 
 ## Instalação mais simples

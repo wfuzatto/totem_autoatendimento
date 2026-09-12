@@ -68,6 +68,7 @@ $loadingEnabled = setting_bool('show_transition_loading', true);
   <script src="<?= htmlspecialchars(app_url('assets/local-device-storage.js')) ?>?v=12"></script>
   <script src="<?= htmlspecialchars(app_url('assets/device-preferences.js')) ?>?v=12"></script>
   <script src="<?= htmlspecialchars(app_url('assets/v2-restored-kiosk.js')) ?>?v=8"></script>
+  <script src="<?= htmlspecialchars(app_url('assets/nfc-auto.js')) ?>?v=1"></script>
   <script src="<?= htmlspecialchars(app_url('assets/transition-loading.js')) ?>?v=16"></script>
   <script src="<?= htmlspecialchars(app_url('assets/loading-settings.js')) ?>?v=16"></script>
   <script src="<?= htmlspecialchars(app_url('assets/v2-home-icons.js')) ?>?v=9"></script>
