@@ -37,6 +37,7 @@
       let phase = 'checking';
       let retryAllowed = false;
       let recoveryUid = '';
+      let reviewPending = false;
       const active = () => !stopped && root.isConnected;
       const observer = new MutationObserver(() => { if (!root.isConnected) stop(); });
       const stop = () => { stopped = true; clearTimeout(timer); observer.disconnect(); };
@@ -55,7 +56,7 @@
         button.disabled = !ready || name === 'writing' || (guard.waitingRemoval && !recoveringUncertainWrite) || (name === 'error' && !retry && !recoveringUncertainWrite);
         button.textContent = name === 'writing'
           ? 'Gravando pulseira...'
-          : recoveringUncertainWrite ? 'Confirmar reemissão'
+          : recoveringUncertainWrite ? 'Conferir pulseira'
             : name === 'error' && retry ? 'Tentar novamente'
               : 'Gravar pulseira · UH ' + (context?.room_number || '—');
         if (!ready) button.textContent = 'Gravação indisponível';
@@ -66,21 +67,36 @@
         context = await json('/api/reservations/' + reservationId + '/access-context');
         status = await json('/api/access-control/status');
         if (!active()) return;
-        const credentials = new Map((context.credentials || []).map(c => [c.guest_id, c.uid]));
+        const credentials = new Map((context.credentials || []).map(c => [c.guest_id, c]));
         // Simulation and stale browser snapshots are not evidence of a real write.
-        const adults = guests.filter(g => g.adult).map(g => ({ ...g, uid: credentials.get(g.id) || null }));
-        next = adults.find(g => !g.uid);
+        const adults = guests.filter(g => g.adult).map(g => {
+          const credential = credentials.get(g.id) || {};
+          return { ...g, uid: credential.uid || null, credentialStatus: credential.status || 'pending' };
+        });
+        reviewPending = adults.some(g => g.credentialStatus === 'manual_review_required');
+        next = adults.find(g => !g.uid && ['pending', 'failed', 'retry_allowed', 'uncertain'].includes(g.credentialStatus));
         const mock = context.provider === 'mock' && status.provider === 'mock';
-        ready = context.ready_for_wristband && (mock || (context.provider === 'bis_api' && status.ready_for_write === true));
-        title.textContent = next ? 'Aproxime a pulseira de ' + next.name : 'Todas as pulseiras foram gravadas';
-        helper.textContent = mock ? 'Teste simulado: nenhum cartão físico será gravado.' : 'Aproxime a pulseira e aguarde. A gravação começa automaticamente.';
-        root.querySelector('.wristband-list').innerHTML = adults.map((g, i) => '<div class="wristband-item"><span><strong>Pulseira ' + (i + 1) + '</strong> · ' + escape(g.name) + '</span><span class="status-pill ' + (g.uid ? 'status-ok' : 'status-pending') + '">' + (g.uid ? mock ? 'Simulada' : 'Gravada' : 'Aguardando') + '</span></div>').join('');
+        const hasUncertain = adults.some(g => g.credentialStatus === 'uncertain');
+        const readerReady = status.online === true && status.codec_present === true && status.pcsc_shim_present === true && status.reader_present === true && status.hotel_password_configured === true;
+        // A prior uncertain write can be reconciled with the codec while new
+        // writes are disabled; this does not make a write available.
+        ready = context.ready_for_wristband && (mock || (context.provider === 'bis_api' && (status.ready_for_write === true || (hasUncertain && readerReady))));
+        title.textContent = next ? 'Aproxime a pulseira de ' + next.name : reviewPending ? 'Há pulseira pendente de conferência' : 'Todas as pulseiras foram gravadas';
+        helper.textContent = mock ? 'Teste simulado: nenhum cartão físico será gravado.' : hasUncertain ? 'Aproxime a pulseira para conferência. Nenhuma gravação será feita.' : 'Aproxime a pulseira e aguarde. A gravação começa automaticamente.';
+        root.querySelector('.wristband-list').innerHTML = adults.map((g, i) => {
+          const label = g.uid ? (mock ? 'Simulada' : 'Gravada')
+            : g.credentialStatus === 'uncertain' ? 'Reconciliação necessária'
+              : g.credentialStatus === 'manual_review_required' ? 'Pendente de conferência'
+                : g.credentialStatus === 'retry_allowed' ? 'Aguardando nova tentativa'
+                  : 'Aguardando';
+          return '<div class="wristband-item"><span><strong>Pulseira ' + (i + 1) + '</strong> · ' + escape(g.name) + '</span><span class="status-pill ' + (g.uid ? 'status-ok' : 'status-pending') + '">' + label + '</span></div>';
+        }).join('');
         const blocker = context.blockers?.[0]?.message || status.error || 'Gravação indisponível.';
-        panel.innerHTML = '<div class="d-flex justify-content-between flex-wrap gap-3"><strong class="fs-3">UH ' + escape(context.room_number || 'aguardando PMS') + '</strong><strong>' + escape(date(context.valid_from || context.checkin_date)) + ' → ' + escape(date(context.valid_until || context.checkout_date)) + '</strong></div><div class="mt-3">' + (mock ? 'Modo de teste simulado' : ready ? '● BIS API conectado<br>● ACS ACR122U pronto<br>● Gravação real habilitada' : escape(blocker)) + '</div>';
+        panel.innerHTML = '<div class="d-flex justify-content-between flex-wrap gap-3"><strong class="fs-3">UH ' + escape(context.room_number || 'aguardando PMS') + '</strong><strong>' + escape(date(context.valid_from || context.checkin_date)) + ' → ' + escape(date(context.valid_until || context.checkout_date)) + '</strong></div><div class="mt-3">' + (mock ? 'Modo de teste simulado' : ready ? '● BIS API conectado<br>● ACS ACR122U pronto<br>● ' + (status.ready_for_write ? 'Gravação real habilitada' : 'Conferência somente leitura habilitada') : escape(blocker)) + '</div>';
         panel.className = 'alert rounded-4 my-4 ' + (ready ? 'alert-success' : 'alert-danger');
         checkedAt = Date.now();
         if (!ready) state('error', blocker);
-        else if (!next && !guard.waitingRemoval) state('complete', 'Todas as pulseiras foram gravadas.');
+        else if (!next && !guard.waitingRemoval) state(reviewPending ? 'error' : 'complete', reviewPending ? 'Uma pulseira exige conferência. As demais podem continuar.' : 'Todas as pulseiras foram gravadas.');
         else if (phase === 'checking') state('waiting', 'Aguardando pulseira...');
       }
 
@@ -100,14 +116,19 @@
         if (!ready || !next) return;
         if (phase === 'error' && recoveryUid) {
           const uid = recoveryUid;
-          state('writing', 'Confirmando a reemissão desta pulseira...');
+          state('writing', 'Conferindo esta pulseira sem gravar...');
           try {
-            await json('/api/reservations/' + reservationId + '/wristbands/' + next.id + '/recover', {
+            const reconciled = await json('/api/reservations/' + reservationId + '/wristbands/' + next.id + '/reconcile', {
               method: 'POST',
               headers: { 'content-type': 'application/json' },
               body: JSON.stringify({ expected_uid: uid })
             });
             if (!active()) return;
+            await refresh();
+            if (reconciled.outcome !== 'written_reconciled' && reconciled.outcome !== 'retry_allowed') {
+              state('error', reconciled.instruction || 'Pulseira pendente de conferência. A fila pode continuar.', false);
+              return;
+            }
             flow.retry({ force: true });
             guard.waitingRemoval = true;
             guard.removalReads = 0;
@@ -135,7 +156,7 @@
         try {
           if (!context || Date.now() - checkedAt > 3000) await refresh();
           if (active() && ready && context.provider === 'bis_api' && (next || guard.waitingRemoval)) await flow.step();
-          if (active() && !next && ready && !guard.waitingRemoval) state('complete', 'Todas as pulseiras foram gravadas.');
+          if (active() && !next && ready && !guard.waitingRemoval) state(reviewPending ? 'error' : 'complete', reviewPending ? 'Uma pulseira exige conferência. As demais podem continuar.' : 'Todas as pulseiras foram gravadas.');
         } catch (error) { ready = false; if (active()) state('error', error.message); }
         finally { if (active()) timer = setTimeout(tick, 700); }
       }

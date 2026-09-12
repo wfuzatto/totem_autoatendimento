@@ -224,7 +224,7 @@ async function cardStatus(reader = '') {
 
 function validUid(value) { return /^(?:[0-9A-F]{8}|[0-9A-F]{14}|[0-9A-F]{20})$/i.test(String(value || '')); }
 
-async function hardwareStatus() {
+async function hardwareStatus({ requireWrite = true } = {}) {
   const configError = configurationError();
   const status = { ok: false, provider: 'bis_api', online: false, configured: !configError, ready_for_write: false };
   if (configError) return { ...status, code: 'bis_api_config', error: configError };
@@ -251,12 +251,34 @@ async function hardwareStatus() {
       [status.pcsc_shim_present, 'shim_missing', 'PC/SC shim ausente.'],
       [status.reader_present, 'reader_missing', 'ACR122U não encontrado.'],
       [status.hotel_password_configured, 'hpass_missing', 'HotelPassword/HPASS não configurado no Windows.'],
-      [status.writes_enabled, 'writes_disabled', 'Gravação não habilitada no BisApi.']
+      ...(requireWrite ? [[status.writes_enabled, 'writes_disabled', 'Gravação não habilitada no BisApi.']] : [])
     ];
     const failure = checks.find(([ready]) => !ready);
     if (failure) return { ...status, code: failure[1], error: failure[2] };
     return { ...status, ok: true, ready_for_write: true, code: 'ready' };
   } catch (error) { return { ...status, code: error.code || 'bis_api_error', error: error.message }; }
+}
+
+function readField(result, camel, pascal) {
+  const value = result?.[camel] ?? result?.[pascal];
+  return value == null ? null : String(value).trim();
+}
+
+async function readGuestCard() {
+  const result = await requestJson('/api/vendor/read-guest-card');
+  const vendorResult = Number(result?.vendorResult ?? result?.VendorResult);
+  return {
+    success: (result?.success ?? result?.Success) === true,
+    vendorResult: Number.isInteger(vendorResult) ? vendorResult : null,
+    reader: readField(result, 'reader', 'Reader'),
+    uidHex: readField(result, 'uidHex', 'UidHex')?.toUpperCase() || null,
+    doorId: readField(result, 'doorId', 'DoorId'),
+    guestSerial: Number(result?.guestSerial ?? result?.GuestSerial ?? 0) || null,
+    holderSerial: Number(result?.holderSerial ?? result?.HolderSerial ?? 0) || null,
+    guestIndex: Number(result?.guestIndex ?? result?.GuestIndex ?? 0) || null,
+    beginTime: readField(result, 'beginTime', 'BeginTime'),
+    endTime: readField(result, 'endTime', 'EndTime')
+  };
 }
 
 function resultField(result, camel, pascal) {
@@ -328,5 +350,6 @@ module.exports = {
   readers,
   readerStatus,
   cardStatus,
+  readGuestCard,
   encodeHotelCard
 };

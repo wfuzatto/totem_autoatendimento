@@ -37,8 +37,44 @@ function installAccessControlRuntime(app) {
   const requiredRemovalReads = 2;
 
   function realCredential(guestId) {
-    const row = db.prepare("SELECT * FROM wristband_credentials WHERE guest_id=? AND provider='bis_api' AND status='encoded'").get(guestId);
+    const row = db.prepare("SELECT * FROM wristband_credentials WHERE guest_id=? AND provider='bis_api' AND status IN ('encoded','written_reconciled')").get(guestId);
     return row && bisApi.validUid(row.wristband_code) ? row : null;
+  }
+
+  function credentialFor(reservationId, guestId) {
+    return db.prepare("SELECT * FROM wristband_credentials WHERE reservation_id=? AND guest_id=? AND provider='bis_api'").get(reservationId, guestId) || null;
+  }
+
+  function codecTime(value) {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+    return match ? `${match[1].slice(2)}${match[2]}${match[3]}${match[4]}${match[5]}` : null;
+  }
+
+  function expectedReadback(current) {
+    const window = bisApi.accessWindow(current);
+    return {
+      doorId: String(current.room_number || '').trim().padStart(6, '0'),
+      beginTime: codecTime(window.validFrom),
+      endTime: codecTime(window.validUntil),
+      guestIndex: 2
+    };
+  }
+
+  function readbackMatchesExpected(readback, expected) {
+    return readback.success === true
+      && readback.doorId === expected.doorId
+      && readback.beginTime === expected.beginTime
+      && readback.endTime === expected.endTime
+      && readback.guestIndex === expected.guestIndex;
+  }
+
+  function readbackIsBlank(readback) {
+    return readback.success === true
+      && !readback.doorId
+      && !readback.beginTime
+      && !readback.endTime
+      && !readback.guestSerial
+      && !readback.holderSerial;
   }
 
   function reservation(id) {
@@ -139,10 +175,14 @@ function installAccessControlRuntime(app) {
       valid_from: window.validFrom,
       valid_until: window.validUntil,
       provider: provider(),
-      credentials: guests(res.id).filter(g => g.adult).map(g => ({
-        guest_id: g.id,
-        uid: provider() === 'bis_api' ? realCredential(g.id)?.wristband_code || null : g.wristband_code || null
-      })),
+      credentials: guests(res.id).filter(g => g.adult).map(g => {
+        const credential = provider() === 'bis_api' ? credentialFor(res.id, g.id) : null;
+        return {
+          guest_id: g.id,
+          uid: provider() === 'bis_api' ? realCredential(g.id)?.wristband_code || null : g.wristband_code || null,
+          status: provider() === 'bis_api' ? credential?.status || 'pending' : (g.wristband_code ? 'encoded_mock' : 'pending')
+        };
+      }),
       ready_for_wristband: blockers.length === 0,
       blockers,
       bis_api: provider() === 'bis_api' ? {
@@ -218,7 +258,7 @@ function installAccessControlRuntime(app) {
     if (readerBusy) return res.json({ ok: true, provider: 'bis_api', busy: true, present: null, awaiting_removal: awaitingRemoval });
     readerBusy = true;
     try {
-      const status = await bisApi.hardwareStatus();
+      const status = await bisApi.hardwareStatus({ requireWrite: false });
       if (!status.ready_for_write) return res.json({ ...status, present: null });
       const card = await bisApi.cardStatus(status.reader);
       // Require two consecutive explicit PC/SC no-card responses before allowing
@@ -232,6 +272,58 @@ function installAccessControlRuntime(app) {
       return res.json({ ok: true, provider: 'bis_api', present: card.present, reader: card.reader, uidHex: card.uidHex || null, awaiting_removal: awaitingRemoval });
     } catch (error) {
       return res.json({ ok: false, provider: 'bis_api', present: null, error: error.message, code: error.code || 'bis_api_error' });
+    } finally { readerBusy = false; }
+  });
+
+  // Reconciliation is deliberately read-only.  It never changes the card and
+  // never converts an uncertain write into a retry without codec evidence.
+  app.post('/api/reservations/:id/wristbands/:guestId/reconcile', express.json({ limit: '1mb' }), async (req, res) => {
+    const id = Number(req.params.id);
+    const guestId = Number(req.params.guestId);
+    const current = reservation(id);
+    if (!current) return res.status(404).json({ error: 'Reserva não encontrada.' });
+    if (provider() !== 'bis_api') return res.status(409).json({ error: 'Reconciliação disponível somente para o BisApi.', code: 'provider_not_real' });
+    const guest = db.prepare('SELECT * FROM guests WHERE id=? AND reservation_id=? AND adult=1').get(guestId, id);
+    if (!guest) return res.status(404).json({ error: 'Hóspede adulto não encontrado.' });
+    const previous = credentialFor(id, guestId);
+    if (previous?.status !== 'uncertain') return res.status(409).json({ error: 'Não existe uma gravação incerta para conferir.', code: 'reconciliation_not_needed' });
+    const expectedUid = String(req.body?.expected_uid || '').trim().toUpperCase();
+    if (!bisApi.validUid(expectedUid)) return res.status(400).json({ error: 'UID da pulseira inválido para conferência.', code: 'uid_invalid' });
+    if (readerBusy) return res.status(409).json({ error: 'Leitor ocupado. Aguarde a conclusão da operação atual.', code: 'reader_busy' });
+
+    readerBusy = true;
+    try {
+      const status = await bisApi.hardwareStatus({ requireWrite: false });
+      if (!status.ready_for_write) throw new bisApi.BisApiError(status.error, { status: 503, code: status.code });
+      const card = await bisApi.cardStatus(status.reader);
+      if (!card.present) throw new bisApi.BisApiError('Aproxime a mesma pulseira antes de conferir.', { status: 409, code: 'card_absent' });
+      if (card.uidHex !== expectedUid) throw new bisApi.BisApiError('A pulseira no leitor não corresponde à tentativa anterior.', { status: 409, code: 'card_changed' });
+      const readback = await bisApi.readGuestCard();
+      if (readback.uidHex && readback.uidHex !== expectedUid) throw new bisApi.BisApiError('O UID mudou durante a leitura. Retire e aproxime novamente a pulseira.', { status: 409, code: 'card_changed' });
+
+      const expected = expectedReadback(current);
+      if (readbackMatchesExpected(readback, expected)) {
+        const now = new Date().toISOString();
+        db.transaction(() => {
+          db.prepare('UPDATE guests SET wristband_code=? WHERE id=?').run(card.uidHex, guestId);
+          upsertCredential({ current, guest, selectedProvider: 'bis_api', status: 'written_reconciled', code: card.uidHex, encodedAt: now, validFrom: current.checkin_date, validUntil: current.checkout_date, lastError: null });
+        })();
+        awaitingRemoval = true;
+        removalNoCardReads = 0;
+        audit('wristband.encode.reconciled', id, { guest_id: guestId, provider: 'bis_api', uid: card.uidHex, room_number: current.room_number, vendor_result: readback.vendorResult });
+        return res.json({ ok: true, provider: 'bis_api', outcome: 'written_reconciled', code: card.uidHex, instruction: 'Pulseira confirmada. Retire-a do leitor.' });
+      }
+
+      const outcome = readbackIsBlank(readback) ? 'retry_allowed' : 'manual_review_required';
+      const message = outcome === 'retry_allowed'
+        ? 'O codec confirmou uma pulseira vazia. Retire-a antes de uma única nova tentativa.'
+        : 'O codec não confirmou que esta pulseira pertence a esta emissão. Nenhuma nova gravação será feita.';
+      db.prepare('UPDATE wristband_credentials SET status=?,last_error=?,updated_at=CURRENT_TIMESTAMP WHERE id=?').run(outcome, message, previous.id);
+      if (outcome === 'retry_allowed') { awaitingRemoval = true; removalNoCardReads = 0; }
+      audit('wristband.encode.reconciled', id, { guest_id: guestId, provider: 'bis_api', uid: card.uidHex, outcome, vendor_result: readback.vendorResult });
+      return res.json({ ok: true, provider: 'bis_api', outcome, instruction: outcome === 'retry_allowed' ? 'Retire a pulseira antes da nova tentativa.' : 'Pulseira pendente de conferência; a fila pode continuar.', readback: { success: readback.success, vendorResult: readback.vendorResult, doorId: readback.doorId, guestSerial: readback.guestSerial, guestIndex: readback.guestIndex, beginTime: readback.beginTime, endTime: readback.endTime } });
+    } catch (error) {
+      return res.status(Number(error?.status || 502)).json({ error: error?.message || 'Não foi possível conferir a pulseira.', code: error?.code || 'reconciliation_failed', provider: 'bis_api' });
     } finally { readerBusy = false; }
   });
 
@@ -263,7 +355,7 @@ function installAccessControlRuntime(app) {
       if (!card.present) throw new bisApi.BisApiError('Aproxime a mesma pulseira antes de confirmar a reemissão.', { status: 409, code: 'card_absent' });
       if (card.uidHex !== expectedUid) throw new bisApi.BisApiError('A pulseira no leitor não corresponde à tentativa anterior.', { status: 409, code: 'card_changed' });
 
-      const duplicate = db.prepare("SELECT guest_id FROM wristband_credentials WHERE reservation_id=? AND provider='bis_api' AND status='encoded' AND wristband_code=? AND guest_id<>?")
+      const duplicate = db.prepare("SELECT guest_id FROM wristband_credentials WHERE reservation_id=? AND provider='bis_api' AND status IN ('encoded','written_reconciled') AND wristband_code=? AND guest_id<>?")
         .get(id, card.uidHex, guestId);
       if (duplicate) throw new bisApi.BisApiError('Esta pulseira já pertence a outro hóspede da reserva. Aproxime outra pulseira.', { status: 409, code: 'uid_in_use' });
 
@@ -374,7 +466,7 @@ function installAccessControlRuntime(app) {
       if (!bisApi.validUid(req.body?.expected_uid) || card.uidHex !== String(req.body.expected_uid).toUpperCase()) {
         throw new bisApi.BisApiError('Pulseira retirada ou trocada antes da gravação.', { status: 409, code: 'card_changed' });
       }
-      const duplicate = db.prepare("SELECT guest_id FROM wristband_credentials WHERE reservation_id=? AND provider='bis_api' AND status='encoded' AND wristband_code=? AND guest_id<>?").get(id, card.uidHex, guestId);
+      const duplicate = db.prepare("SELECT guest_id FROM wristband_credentials WHERE reservation_id=? AND provider='bis_api' AND status IN ('encoded','written_reconciled') AND wristband_code=? AND guest_id<>?").get(id, card.uidHex, guestId);
       if (duplicate) throw new bisApi.BisApiError('Esta pulseira já pertence a outro hóspede da reserva. Aproxime outra pulseira.', { status: 409, code: 'uid_in_use' });
       window = bisApi.accessWindow(current);
       upsertCredential({
