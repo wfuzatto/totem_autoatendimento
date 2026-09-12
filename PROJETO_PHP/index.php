@@ -16,6 +16,7 @@ $loadingEnabled = setting_bool('show_transition_loading', true);
   <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/v2-restored.css')) ?>?v=8">
   <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/v2-restored-fixes.css')) ?>?v=14">
   <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/transition-loading-fixes.css')) ?>?v=15">
+  <link rel="stylesheet" href="<?= htmlspecialchars(app_url('assets/face-scanner-ui.css')) ?>?v=17">
 </head>
 <body data-skin="<?= htmlspecialchars($skin, ENT_QUOTES, 'UTF-8') ?>">
   <header class="kiosk-header">
@@ -67,6 +68,7 @@ $loadingEnabled = setting_bool('show_transition_loading', true);
   <script src="<?= htmlspecialchars(app_url('assets/v2-restored-keyboard.js')) ?>?v=8"></script>
   <script src="<?= htmlspecialchars(app_url('assets/local-device-storage.js')) ?>?v=12"></script>
   <script src="<?= htmlspecialchars(app_url('assets/device-preferences.js')) ?>?v=12"></script>
+  <script src="<?= htmlspecialchars(app_url('assets/face-scanner-ui.js')) ?>?v=17"></script>
   <script src="<?= htmlspecialchars(app_url('assets/v2-restored-kiosk.js')) ?>?v=8"></script>
   <script src="<?= htmlspecialchars(app_url('assets/nfc-auto.js')) ?>?v=1"></script>
   <script src="<?= htmlspecialchars(app_url('assets/transition-loading.js')) ?>?v=16"></script>

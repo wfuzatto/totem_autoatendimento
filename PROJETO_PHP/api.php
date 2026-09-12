@@ -73,7 +73,12 @@ try {
 
         case 'lookup':
             $type=(string)($data['type']??'auto');if(!in_array($type,['auto','reservation','cpf','qr'],true))$type='auto';
-            $b=find_reservation((string)($data['query']??''),$type==='qr'?'reservation':$type);if(!$b)json_response(['error'=>'Reserva não encontrada.'],404);audit('reservation.lookup',(int)$b['reservation']['id'],['query_type'=>$type]);json_response($b);
+            $b=find_reservation((string)($data['query']??''),$type==='qr'?'reservation':$type);if(!$b)json_response(['error'=>'Reserva não encontrada.'],404);
+            start_app_session();
+            $_SESSION['active_reservation_id']=(int)$b['reservation']['id'];
+            $_SESSION['active_reservation_at']=time();
+            $_SESSION['face_scanner_verifications']=[];
+            audit('reservation.lookup',(int)$b['reservation']['id'],['query_type'=>$type]);json_response($b);
 
         case 'reservation_bundle':
             $b=reservation_bundle((int)($_GET['id']??0));if(!$b)json_response(['error'=>'Reserva não encontrada.'],404);json_response($b);
@@ -97,7 +102,16 @@ try {
             $id=(int)($data['reservation_id']??0);$doc=(int)($data['document_id']??0);json_response(remove_document($id,$doc));
 
         case 'face_verify':
-            $id=(int)($data['reservation_id']??0);$guest=(int)($data['guest_id']??0);json_response(verify_face($id,$guest));
+            $id=(int)($data['reservation_id']??0);$guest=(int)($data['guest_id']??0);
+            if(setting_bool('face_scanner_enabled',false)){
+                $faceStmt=db()->prepare('SELECT face_verified FROM guests WHERE id=? AND reservation_id=? AND adult=1');
+                $faceStmt->execute([$guest,$id]);
+                $faceRow=$faceStmt->fetch();
+                if(!$faceRow)json_response(['error'=>'Hóspede adulto não encontrado.'],404);
+                if(empty($faceRow['face_verified']))json_response(['error'=>'Validação biométrica real pendente. Capture e compare o rosto antes de avançar.'],409);
+                json_response(reservation_bundle($id) ?: ['error'=>'Reserva não encontrada.']);
+            }
+            json_response(verify_face($id,$guest));
 
         case 'govbr_verify':
             $id=(int)($data['reservation_id']??0);json_response(verify_govbr($id));
