@@ -99,6 +99,8 @@ test('real NFC contract, failures, locks and simulated credential migration', as
     assert.equal((await encode()).body.already_encoded, true); assert.equal(calls, 1);
     assert.equal((await encode(adults[1].id)).body.code, 'awaiting_removal');
     present = false; await card(); present = true;
+    assert.equal((await encode(adults[1].id)).body.code, 'awaiting_removal');
+    present = false; await card(); present = true;
     assert.equal((await encode(adults[1].id)).body.code, 'uid_in_use'); assert.equal(calls, 1);
   });
   for (const bad of ['missing', 'rejected', 'string', '500', 'timeout']) await t.test(bad + ' never persists success or retries uncertain writes', async () => {

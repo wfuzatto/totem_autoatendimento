@@ -33,6 +33,8 @@ function installAccessControlRuntime(app) {
   const encodingInFlight = new Set();
   let readerBusy = false;
   let awaitingRemoval = false;
+  let removalNoCardReads = 0;
+  const requiredRemovalReads = 2;
 
   function realCredential(guestId) {
     const row = db.prepare("SELECT * FROM wristband_credentials WHERE guest_id=? AND provider='bis_api' AND status='encoded'").get(guestId);
@@ -211,8 +213,14 @@ function installAccessControlRuntime(app) {
       const status = await bisApi.hardwareStatus();
       if (!status.ready_for_write) return res.json({ ...status, present: null });
       const card = await bisApi.cardStatus(status.reader);
-      // Only an explicit PC/SC no-card response counts as removal. Disconnects and HTTP errors do not.
-      if (card.present === false) awaitingRemoval = false;
+      // Require two consecutive explicit PC/SC no-card responses before allowing
+      // the next guest. A transient reader gap must not release the previous UID.
+      if (card.present === false) {
+        removalNoCardReads += 1;
+        if (removalNoCardReads >= requiredRemovalReads) awaitingRemoval = false;
+      } else if (card.present === true) {
+        removalNoCardReads = 0;
+      }
       return res.json({ ok: true, provider: 'bis_api', present: card.present, reader: card.reader, uidHex: card.uidHex || null, awaiting_removal: awaitingRemoval });
     } catch (error) {
       return res.json({ ok: false, provider: 'bis_api', present: null, error: error.message, code: error.code || 'bis_api_error' });
@@ -332,6 +340,7 @@ function installAccessControlRuntime(app) {
 
       writeDispatched = true;
       awaitingRemoval = true;
+      removalNoCardReads = 0;
       const hardware = await bisApi.encodeHotelCard({ reservation: current, guest });
       if (!bisApi.validUid(hardware.uidHex) || hardware.uidHex !== card.uidHex) {
         throw new bisApi.BisApiError('O bis_api confirmou a gravação, mas não retornou o UID do cartão.', {

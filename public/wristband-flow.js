@@ -18,16 +18,26 @@
           if (card.busy) { onState('busy', 'Leitor ocupado. Aguarde...'); return; }
           if (card.awaiting_removal) guard.waitingRemoval = true;
           if (card.present === false) {
-            guard.waitingRemoval = false;
+            if (guard.waitingRemoval) {
+              guard.removalReads = (guard.removalReads || 0) + 1;
+              if (card.awaiting_removal || guard.removalReads < 2) {
+                onState('remove', 'Retire a pulseira do leitor.');
+                return;
+              }
+              guard.waitingRemoval = false;
+              guard.removalReads = 0;
+            }
             if (failed) onState('error', failed.message, failed.retryable !== false);
             else onState('waiting', 'Aguardando pulseira...');
             return;
           }
+          guard.removalReads = 0;
           if (guard.waitingRemoval) { onState('remove', 'Retire a pulseira do leitor.'); return; }
           if (failed) { onState('error', failed.message, failed.retryable !== false); return; }
           if (card.present !== true || !card.uidHex) throw new Error('Nenhuma pulseira detectada.');
           onState('detected', 'Pulseira detectada.');
           guard.waitingRemoval = true;
+          guard.removalReads = 0;
           dispatched = true;
           onState('writing', 'Gravando pulseira... Não retire do leitor.');
           const result = await encode(card.uidHex);

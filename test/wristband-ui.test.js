@@ -14,9 +14,9 @@ test('flow requires physical removal, serializes polls and does not auto retry e
   });
   await Promise.all([flow.step(), flow.step(), flow.step()]); assert.equal(count, 1);
   await flow.step(); assert.equal(count, 1); assert.equal(states.at(-1)[0], 'remove');
-  present = false; await flow.step(); present = true; failed = true;
+  present = false; await flow.step(); await flow.step(); present = true; failed = true;
   await flow.step(); assert.equal(count, 2);
-  present = false; await flow.step(); present = true; flow.retry(); await flow.step();
+  present = false; await flow.step(); await flow.step(); present = true; flow.retry(); await flow.step();
   assert.equal(count, 2); // timeout requires review, not automatic or manual blind retry
   alive = false; await flow.step(); assert.equal(count, 2);
 });
@@ -55,9 +55,9 @@ test('screen entered after home auto writes, ignores simulated badge, waits remo
   await tick(); assert.equal(calls, 1);
   assert.match(w.document.body.textContent, /Retire a pulseira/);
   assert.equal(w.document.getElementById('encodeBand').disabled, true);
-  present = false; await tick(); present = true; uid = 'AABBCCDD'; await tick();
+  present = false; await tick(); await tick(); present = true; uid = 'AABBCCDD'; await tick();
   assert.equal(calls, 2);
-  present = false; await tick();
+  present = false; await tick(); await tick();
   assert.equal(w.document.querySelector('[data-action="bands-encoded"]').disabled, false);
   w.document.getElementById('app').textContent = 'Home'; await settle(); const previousReads = reads;
   while (timers.length) await tick(); assert.equal(reads, previousReads);
