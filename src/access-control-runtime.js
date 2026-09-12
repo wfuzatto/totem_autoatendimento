@@ -197,6 +197,9 @@ function installAccessControlRuntime(app) {
     try {
       const health = await bisApi.health();
       const vendor = health?.vendor || health?.Vendor || {};
+      const configuredReader = vendor?.pcscReader || vendor?.PcscReader || null;
+      let reader = { readers: [], reader: configuredReader, present: false };
+      try { reader = await bisApi.readerStatus(configuredReader); } catch (_) {}
       return res.json({
         ok: true,
         provider: selectedProvider,
@@ -208,7 +211,15 @@ function installAccessControlRuntime(app) {
         pcsc_shim_present: Boolean(vendor?.pcscShimPresent ?? vendor?.PcscShimPresent),
         writes_enabled: Boolean(vendor?.hotelCardWritesEnabled ?? vendor?.HotelCardWritesEnabled),
         hotel_password_configured: Boolean(vendor?.hotelPasswordConfigured ?? vendor?.HotelPasswordConfigured),
-        reader: vendor?.pcscReader || vendor?.PcscReader || null,
+        reader: configuredReader,
+        reader_present: reader.present,
+        available_readers: reader.readers,
+        ready_for_write: Boolean(
+          vendor?.codecPresent ?? vendor?.CodecPresent
+        ) && Boolean(vendor?.pcscShimPresent ?? vendor?.PcscShimPresent)
+          && Boolean(vendor?.hotelCardWritesEnabled ?? vendor?.HotelCardWritesEnabled)
+          && Boolean(vendor?.hotelPasswordConfigured ?? vendor?.HotelPasswordConfigured)
+          && reader.present,
         datetime_format: vendor?.dateTimeFormat || vendor?.DateTimeFormat || null
       });
     } catch (error) {
@@ -220,6 +231,21 @@ function installAccessControlRuntime(app) {
         error: error.message,
         code: error.code || 'bis_api_error'
       });
+    }
+  });
+
+  app.get('/api/access-control/card-status', async (_req, res) => {
+    if (provider() !== 'bis_api') return res.json({ ok: true, provider: provider(), present: false, mock: true });
+    try {
+      const health = await bisApi.health();
+      const vendor = health?.vendor || health?.Vendor || {};
+      const configuredReader = vendor?.pcscReader || vendor?.PcscReader || '';
+      const reader = await bisApi.readerStatus(configuredReader);
+      if (!reader.present) return res.json({ ok: true, provider: 'bis_api', present: false, reader: configuredReader || null });
+      const card = await bisApi.cardStatus(reader.reader);
+      return res.json({ ok: true, provider: 'bis_api', present: card.present, reader: card.reader || reader.reader, uidHex: card.uidHex || null });
+    } catch (error) {
+      return res.json({ ok: false, provider: 'bis_api', present: false, error: error.message, code: error.code || 'bis_api_error' });
     }
   });
 

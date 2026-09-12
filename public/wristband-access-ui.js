@@ -5,6 +5,10 @@
   let accessFetchInFlight = false;
   let encodingInProgress = false;
   let lastHardwareStatus = null;
+  let cardPollTimer = null;
+  let cardFetchInFlight = false;
+  let awaitingRemoval = false;
+  let detectedUid = '';
 
   function requestUrl(input) {
     if (typeof input === 'string') return input;
@@ -34,6 +38,11 @@
         if (type.includes('application/json')) {
           const payload = await clone.json();
           captureReservationId(payload);
+          if (isEncode && response.ok && payload?.ok && !payload?.already_encoded) {
+            awaitingRemoval = true;
+            detectedUid = '';
+            showFlowMessage('Pulseira gravada. Retire-a do leitor para continuar.');
+          }
         }
       } catch (_) {}
       return response;
@@ -95,7 +104,8 @@
       status?.codec_present &&
       status?.pcsc_shim_present &&
       status?.writes_enabled &&
-      status?.hotel_password_configured
+      status?.hotel_password_configured &&
+      status?.reader_present
     );
   }
 
@@ -121,6 +131,19 @@
     } else if (room && ready) {
       encodeButton.innerHTML = `<i class="bi bi-broadcast me-2"></i>Gravar pulseira · UH ${escapeHtml(room)}`;
     }
+  }
+
+  function showFlowMessage(message, isError = false) {
+    const scanBox = document.querySelector('.scan-box');
+    if (!scanBox) return;
+    let node = scanBox.querySelector('.wristband-auto-message');
+    if (!node) {
+      node = document.createElement('div');
+      node.className = 'wristband-auto-message mt-3';
+      scanBox.appendChild(node);
+    }
+    node.className = `wristband-auto-message mt-3 ${isError ? 'text-danger' : 'text-secondary'}`;
+    node.textContent = message;
   }
 
   function renderPanel(context, status) {
@@ -178,6 +201,8 @@
     const helper = scanBox.querySelector('p.text-secondary');
     if (helper && context?.provider === 'bis_api') helper.textContent = 'Leitor/gravador: ACS ACR122U · codec BIS/Be-Tech.';
     updateEncodeButton(context, status);
+    if (context?.provider === 'bis_api' && ready) showFlowMessage(awaitingRemoval ? 'Aguardando retirada da pulseira...' : 'Aguardando pulseira...');
+    else if (context?.provider === 'bis_api') showFlowMessage(deviceLabel, true);
   }
 
   function escapeHtml(value) {
@@ -214,9 +239,56 @@
     }
   }
 
+  async function pollCard() {
+    if (!onWristbandScreen() || !reservationId || cardFetchInFlight) return;
+    const context = window.__TOTEM_ACCESS_CONTEXT;
+    if (!context || context.provider !== 'bis_api' || !hardwareReady(context, lastHardwareStatus)) return;
+    cardFetchInFlight = true;
+    try {
+      const response = await originalFetch('/api/access-control/card-status', { cache: 'no-store' });
+      const card = await response.json().catch(() => ({}));
+      if (!response.ok || card.ok === false) {
+        showFlowMessage(card.error || 'Não foi possível consultar o ACR122U.', true);
+        return;
+      }
+      if (!card.present) {
+        if (awaitingRemoval) {
+          awaitingRemoval = false;
+          detectedUid = '';
+          showFlowMessage('Aguardando pulseira...');
+          scheduleRefresh(80);
+        }
+        return;
+      }
+      const uid = String(card.uidHex || '').toUpperCase();
+      if (awaitingRemoval) {
+        showFlowMessage('Aguardando retirada da pulseira...');
+        return;
+      }
+      const button = document.getElementById('encodeBand');
+      if (button && !button.disabled && !encodingInProgress && uid && uid !== detectedUid) {
+        detectedUid = uid;
+        showFlowMessage('Pulseira detectada. Gravando...');
+        button.click();
+      }
+    } catch (error) {
+      showFlowMessage(error.message || 'Não foi possível consultar o ACR122U.', true);
+    } finally {
+      cardFetchInFlight = false;
+    }
+  }
+
   function scheduleRefresh(delay = 80) {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(refresh, delay);
+  }
+
+  function scheduleCardPoll(delay = 700) {
+    clearTimeout(cardPollTimer);
+    cardPollTimer = setTimeout(async () => {
+      await pollCard();
+      if (onWristbandScreen()) scheduleCardPoll(700);
+    }, delay);
   }
 
   const observer = new MutationObserver(() => scheduleRefresh(80));
@@ -224,6 +296,7 @@
     const app = document.getElementById('app');
     if (app) observer.observe(app, { childList: true, subtree: true });
     scheduleRefresh(80);
+    scheduleCardPoll(500);
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });

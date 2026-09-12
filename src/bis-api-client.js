@@ -144,6 +144,38 @@ async function health() {
   return requestJson('/api/health');
 }
 
+async function readers() {
+  return requestJson('/api/pcsc/readers');
+}
+
+async function readerStatus(preferredReader = '') {
+  const result = await readers();
+  const available = Array.isArray(result?.readers) ? result.readers.map(item => String(item || '').trim()).filter(Boolean) : [];
+  const preferred = String(preferredReader || '').trim();
+  const reader = preferred && available.some(item => item.toLowerCase() === preferred.toLowerCase())
+    ? available.find(item => item.toLowerCase() === preferred.toLowerCase())
+    : available.find(item => /acr122/i.test(item)) || available[0] || preferred;
+  return { readers: available, reader: reader || null, present: Boolean(reader && available.some(item => item.toLowerCase() === reader.toLowerCase())) };
+}
+
+async function cardStatus(reader = '') {
+  const query = reader ? `?reader=${encodeURIComponent(reader)}` : '';
+  try {
+    const result = await requestJson(`/api/pcsc/probe${query}`);
+    return {
+      present: true,
+      reader: String(result?.reader || result?.Reader || reader || ''),
+      uidHex: String(result?.uidHex || result?.UidHex || result?.uid || result?.Uid || '').trim().toUpperCase(),
+      raw: result
+    };
+  } catch (error) {
+    if (error.code === 'bis_api_http_error' && Number(error.status) === 502) {
+      return { present: false, reader: reader || null, code: error.details?.code || error.details?.Code || null };
+    }
+    throw error;
+  }
+}
+
 function resultField(result, camel, pascal) {
   return result?.[camel] ?? result?.[pascal];
 }
@@ -207,5 +239,8 @@ module.exports = {
   staticBlockers,
   accessWindow,
   health,
+  readers,
+  readerStatus,
+  cardStatus,
   encodeHotelCard
 };

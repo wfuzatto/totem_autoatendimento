@@ -19,6 +19,7 @@ function close(server) {
 
 test('Totem grava pulseira pelo bis_api e só persiste UID após confirmação real', async t => {
   let encodeMode = 'success';
+  let cardPresent = false;
   const received = [];
   const fakeBis = http.createServer(async (req, res) => {
     res.setHeader('content-type', 'application/json');
@@ -36,6 +37,19 @@ test('Totem grava pulseira pelo bis_api e só persiste UID após confirmação r
           dateTimeFormat: 'yyMMddHHmm'
         }
       }));
+      return;
+    }
+    if (req.method === 'GET' && req.url === '/api/pcsc/readers') {
+      res.end(JSON.stringify({ readers: ['ACS ACR122 0'] }));
+      return;
+    }
+    if (req.method === 'GET' && req.url.startsWith('/api/pcsc/probe')) {
+      if (!cardPresent) {
+        res.statusCode = 502;
+        res.end(JSON.stringify({ code: 'SCARD_E_NO_SMARTCARD', error: 'Nenhum cartão presente.' }));
+        return;
+      }
+      res.end(JSON.stringify({ reader: 'ACS ACR122 0', uidHex: 'A1B2C3D4' }));
       return;
     }
     if (req.method === 'POST' && req.url === '/api/hotel-card/encode') {
@@ -120,6 +134,15 @@ test('Totem grava pulseira pelo bis_api e só persiste UID após confirmação r
   assert.equal(status.body.pcsc_shim_present, true);
   assert.equal(status.body.writes_enabled, true);
   assert.equal(status.body.hotel_password_configured, true);
+  assert.equal(status.body.reader_present, true);
+
+  const noCard = await request(app).get('/api/access-control/card-status');
+  assert.equal(noCard.status, 200);
+  assert.equal(noCard.body.present, false);
+  cardPresent = true;
+  const card = await request(app).get('/api/access-control/card-status');
+  assert.equal(card.body.present, true);
+  assert.equal(card.body.uidHex, 'A1B2C3D4');
 
   const encoded = await request(app)
     .post(`/api/reservations/${reservationId}/wristbands/encode`)
