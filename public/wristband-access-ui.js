@@ -48,17 +48,22 @@
         phase = name;
         retryAllowed = retry;
         recoveryUid = recoverUid;
+        const rejectedByHotel = name === 'error' && /BIS código 5|código deste hotel|código 5/i.test(String(text || ''));
         message.textContent = text + (uid ? ' UID: ' + uid : '');
         message.className = 'fw-bold mt-3 ' + (name === 'error' ? 'text-danger' : 'text-success');
-        scan.dataset.nfcState = name;
+        scan.dataset.nfcState = rejectedByHotel ? 'replace-card' : name;
         button.hidden = !next;
         const recoveringUncertainWrite = name === 'error' && Boolean(recoveryUid);
-        button.disabled = !ready || name === 'writing' || (guard.waitingRemoval && !recoveringUncertainWrite) || (name === 'error' && !retry && !recoveringUncertainWrite);
+        button.disabled = rejectedByHotel || !ready || name === 'writing' || (guard.waitingRemoval && !recoveringUncertainWrite) || (name === 'error' && !retry && !recoveringUncertainWrite);
         button.textContent = name === 'writing'
           ? 'Gravando pulseira...'
-          : recoveringUncertainWrite ? 'Conferir pulseira'
-            : name === 'error' && retry ? 'Tentar novamente'
-              : 'Gravar pulseira · UH ' + (context?.room_number || '—');
+          : rejectedByHotel ? 'Retire e use outra pulseira'
+            : recoveringUncertainWrite ? 'Conferir pulseira'
+              : name === 'error' && retry ? 'Tentar novamente'
+                : 'Gravar pulseira · UH ' + (context?.room_number || '—');
+        if (rejectedByHotel) {
+          helper.textContent = 'Esta pulseira não pertence à chave atual do hotel. Retire-a completamente do leitor e aproxime outra pulseira preparada para esta unidade.';
+        }
         if (!ready) button.textContent = 'Gravação indisponível';
         if (advance) advance.disabled = Boolean(next) || !context || !ready || guard.waitingRemoval;
       }
