@@ -1,19 +1,18 @@
 {
   "name": "totem-autoatendimento",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
-  "description": "Totem hoteleiro de check-in e check-out com integrações desacopladas",
+  "description": "Totem hoteleiro de check-in e check-out com pagamentos centralizados e integracoes desacopladas",
   "type": "commonjs",
   "main": "electron/main.js",
   "scripts": {
     "start": "node src/server-main.js",
     "dev": "node --watch src/server-main.js",
     "kiosk": "electron .",
+    "check": "node --check src/server-main.js && node --check src/payment-gateway.js && node --check src/payment-runtime.js",
     "test": "node --test test/*.test.js"
   },
-  "engines": {
-    "node": ">=20"
-  },
+  "engines": { "node": ">=20" },
   "dependencies": {
     "better-sqlite3": "^11.8.1",
     "bootstrap": "^5.3.3",
@@ -24,11 +23,6 @@
     "multer": "^2.0.2",
     "qrcode": "^1.5.4"
   },
-  "optionalDependencies": {
-    "nfc-pcsc": "^0.8.1"
-  },
-  "devDependencies": {
-    "electron": "^35.0.0",
-    "supertest": "^7.1.0"
-  }
+  "optionalDependencies": { "nfc-pcsc": "^0.8.1" },
+  "devDependencies": { "electron": "^35.0.0", "supertest": "^7.1.0" }
 }
