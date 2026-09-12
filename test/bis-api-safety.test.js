@@ -112,4 +112,32 @@ test('real NFC contract, failures, locks and simulated credential migration', as
     present = false; mode = 'ok'; await card(); present = true;
     assert.equal((await encode()).body.code, 'write_uncertain'); assert.equal(calls, 1);
   });
+
+  await t.test('an operator can recover an uncertain write only with the same physical UID', async () => {
+    await reset(); mode = 'timeout';
+    const failed = await encode();
+    assert.equal(failed.status, 504);
+    assert.equal(credential().status, 'uncertain');
+    assert.equal(calls, 1);
+
+    const wrong = await request(app)
+      .post(`/api/reservations/${id}/wristbands/${adults[0].id}/recover`)
+      .send({ expected_uid: 'AABBCCDD' });
+    assert.equal(wrong.status, 409);
+    assert.equal(credential().status, 'uncertain');
+
+    const recovered = await request(app)
+      .post(`/api/reservations/${id}/wristbands/${adults[0].id}/recover`)
+      .send({ expected_uid: uid });
+    assert.equal(recovered.status, 200);
+    assert.equal(recovered.body.recovered, true);
+    assert.equal(credential().status, 'failed');
+    assert.equal(calls, 1); // Recovery is read-only; no write was dispatched.
+
+    present = false; await card(); await card();
+    mode = 'ok'; present = true;
+    const retried = await encode();
+    assert.equal(retried.status, 200);
+    assert.equal(calls, 2);
+  });
 });

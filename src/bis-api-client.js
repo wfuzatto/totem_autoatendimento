@@ -69,6 +69,25 @@ function validateDate(value, field) {
   return raw;
 }
 
+function writeFailureDetails(data) {
+  // Non-2xx responses stay opaque by default: an upstream service must never
+  // reflect the write confirmation back to the kiosk. This endpoint has a
+  // small documented result contract, though, and these fields contain no
+  // secret. Preserving them distinguishes a codec-confirmed failure from a
+  // transport result whose physical outcome is genuinely unknown.
+  const written = data?.written ?? data?.Written;
+  const vendorResult = Number(data?.vendorResult ?? data?.VendorResult);
+  if (written !== false || !Number.isInteger(vendorResult) || vendorResult === 0) return null;
+
+  return {
+    written: false,
+    vendorResult,
+    message: String(data?.message ?? data?.Message ?? '').trim().slice(0, 240),
+    reader: String(data?.reader ?? data?.Reader ?? '').trim().slice(0, 240),
+    uidHex: String(data?.uidHex ?? data?.UidHex ?? '').trim().toUpperCase()
+  };
+}
+
 function accessWindow(reservation) {
   const checkinTime = validateTime(env('HOTEL_ACCESS_CHECKIN_TIME'), 'HOTEL_ACCESS_CHECKIN_TIME');
   const checkoutTime = validateTime(env('HOTEL_ACCESS_CHECKOUT_TIME'), 'HOTEL_ACCESS_CHECKOUT_TIME');
@@ -136,11 +155,19 @@ async function requestJson(path, options = {}) {
     }
     if (!response.ok) {
       // Arbitrary upstream errors may echo the write challenge. Do not forward them.
-      const message = `Falha ao consultar ou gravar no BisApi (HTTP ${response.status}).`;
+      const writeFailure = path === '/api/hotel-card/encode' ? writeFailureDetails(data) : null;
+      const message = writeFailure
+        ? `O codec BIS confirmou que a gravação não foi concluída (código ${writeFailure.vendorResult}).`
+        : `Falha ao consultar ou gravar no BisApi (HTTP ${response.status}).`;
       throw new BisApiError(message, {
         status: response.status >= 500 ? 502 : response.status,
-        code: 'bis_api_http_error',
-        details: { code: data?.code, operation: data?.operation, httpStatus: response.status }
+        code: writeFailure ? 'bis_api_vendor_write_failed' : 'bis_api_http_error',
+        details: {
+          code: data?.code,
+          operation: data?.operation,
+          httpStatus: response.status,
+          writeFailure
+        }
       });
     }
     return data;

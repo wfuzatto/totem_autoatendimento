@@ -190,10 +190,12 @@ test('Totem grava pulseira pelo bis_api e só persiste UID após confirmação r
     .send({ guest_id: adults[1].id, expected_uid: 'A1B2C3D4' });
 
   assert.equal(failed.status, 502);
-  assert.match(failed.body.error, /Falha.*BisApi/i);
+  assert.equal(failed.body.code, 'bis_api_vendor_write_failed');
+  assert.equal(failed.body.retryable, true);
+  assert.match(failed.body.error, /codec BIS confirmou/i);
   assert.equal(db.prepare('SELECT wristband_code FROM guests WHERE id=?').get(adults[1].id).wristband_code, null);
   const failedCredential = db.prepare('SELECT * FROM wristband_credentials WHERE reservation_id=? AND guest_id=?')
     .get(reservationId, adults[1].id);
-  assert.equal(failedCredential.status, 'uncertain');
-  assert.match(failedCredential.last_error, /Falha.*BisApi/i);
+  assert.equal(failedCredential.status, 'failed');
+  assert.match(failedCredential.last_error, /codec BIS confirmou/i);
 });

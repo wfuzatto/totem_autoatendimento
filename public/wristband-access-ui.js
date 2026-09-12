@@ -7,7 +7,7 @@
   async function json(url, options = {}) {
     const response = await fetch(url, { cache: 'no-store', ...options });
     const result = await response.json();
-    if (!response.ok) throw Object.assign(new Error(result.error || 'Gravação indisponível.'), { retryable: result.retryable });
+    if (!response.ok) throw Object.assign(new Error(result.error || 'Gravação indisponível.'), { retryable: result.retryable, code: result.code });
     return result;
   }
 
@@ -36,21 +36,28 @@
       let ready = false;
       let phase = 'checking';
       let retryAllowed = false;
+      let recoveryUid = '';
       const active = () => !stopped && root.isConnected;
       const observer = new MutationObserver(() => { if (!root.isConnected) stop(); });
       const stop = () => { stopped = true; clearTimeout(timer); observer.disconnect(); };
       stopPrevious = stop;
       observer.observe(document.getElementById('app'), { childList: true });
 
-      function state(name, text, retry = false, uid = '') {
+      function state(name, text, retry = false, uid = '', recoverUid = '') {
         phase = name;
         retryAllowed = retry;
+        recoveryUid = recoverUid;
         message.textContent = text + (uid ? ' UID: ' + uid : '');
         message.className = 'fw-bold mt-3 ' + (name === 'error' ? 'text-danger' : 'text-success');
         scan.dataset.nfcState = name;
         button.hidden = !next;
-        button.disabled = !ready || name === 'writing' || guard.waitingRemoval || (name === 'error' && !retry);
-        button.textContent = name === 'writing' ? 'Gravando pulseira...' : name === 'error' && retry ? 'Tentar novamente' : 'Gravar pulseira · UH ' + (context?.room_number || '—');
+        const recoveringUncertainWrite = name === 'error' && Boolean(recoveryUid);
+        button.disabled = !ready || name === 'writing' || (guard.waitingRemoval && !recoveringUncertainWrite) || (name === 'error' && !retry && !recoveringUncertainWrite);
+        button.textContent = name === 'writing'
+          ? 'Gravando pulseira...'
+          : recoveringUncertainWrite ? 'Confirmar reemissão'
+            : name === 'error' && retry ? 'Tentar novamente'
+              : 'Gravar pulseira · UH ' + (context?.room_number || '—');
         if (!ready) button.textContent = 'Gravação indisponível';
         if (advance) advance.disabled = Boolean(next) || !context || !ready || guard.waitingRemoval;
       }
@@ -90,7 +97,27 @@
       });
 
       button.onclick = async () => {
-        if (!ready || !next || guard.waitingRemoval) return;
+        if (!ready || !next) return;
+        if (phase === 'error' && recoveryUid) {
+          const uid = recoveryUid;
+          state('writing', 'Confirmando a reemissão desta pulseira...');
+          try {
+            await json('/api/reservations/' + reservationId + '/wristbands/' + next.id + '/recover', {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ expected_uid: uid })
+            });
+            if (!active()) return;
+            flow.retry({ force: true });
+            guard.waitingRemoval = true;
+            guard.removalReads = 0;
+            state('remove', 'Reemissão autorizada. Retire a pulseira do leitor.');
+          } catch (error) {
+            if (active()) state('error', error.message, false, '', uid);
+          }
+          return;
+        }
+        if (guard.waitingRemoval) return;
         if (context.provider === 'mock') {
           state('writing', 'Simulando...');
           try {

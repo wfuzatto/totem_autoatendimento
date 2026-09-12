@@ -6,11 +6,12 @@
     let inFlight = false;
     let failed = null;
     return {
-      retry() { if (failed?.retryable !== false) failed = null; },
+      retry({ force = false } = {}) { if (force || failed?.retryable !== false) failed = null; },
       async step() {
         if (inFlight || !active()) return;
         inFlight = true;
         let dispatched = false;
+        let detectedUid = '';
         try {
           const card = await readCard();
           if (!active()) return;
@@ -33,8 +34,12 @@
           }
           guard.removalReads = 0;
           if (guard.waitingRemoval) { onState('remove', 'Retire a pulseira do leitor.'); return; }
-          if (failed) { onState('error', failed.message, failed.retryable !== false); return; }
+          if (failed) {
+            onState('error', failed.message, failed.retryable === true, '', failed.recoveryUid || '');
+            return;
+          }
           if (card.present !== true || !card.uidHex) throw new Error('Nenhuma pulseira detectada.');
+          detectedUid = card.uidHex;
           onState('detected', 'Pulseira detectada.');
           guard.waitingRemoval = true;
           guard.removalReads = 0;
@@ -48,8 +53,14 @@
           if (active()) await onWritten(result);
         } catch (error) {
           if (!active()) return;
-          if (dispatched) failed = { message: error.message, retryable: error.retryable === true };
-          onState('error', error.message, dispatched && failed.retryable);
+          if (dispatched) {
+            failed = {
+              message: error.message,
+              retryable: error.retryable === true,
+              recoveryUid: error.code === 'write_uncertain' ? detectedUid : ''
+            };
+          }
+          onState('error', error.message, dispatched && failed?.retryable === true, '', failed?.recoveryUid || '');
         } finally { inFlight = false; }
       }
     };

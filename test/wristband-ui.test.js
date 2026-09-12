@@ -21,6 +21,27 @@ test('flow requires physical removal, serializes polls and does not auto retry e
   alive = false; await flow.step(); assert.equal(count, 2);
 });
 
+test('flow requires explicit recovery for an uncertain write and retains its physical UID', async () => {
+  const states = []; let calls = 0;
+  const flow = createFlow({
+    guard: { waitingRemoval: false },
+    active: () => true,
+    onWritten: async () => {},
+    onState: (...args) => states.push(args),
+    readCard: async () => ({ ok: true, present: true, uidHex: 'A1B2C3D4' }),
+    encode: async () => { calls++; throw Object.assign(new Error('Resultado anterior incerto.'), { code: 'write_uncertain', retryable: false }); }
+  });
+  await flow.step();
+  const error = states.at(-1);
+  assert.equal(error[0], 'error');
+  assert.equal(error[2], false);
+  assert.equal(error[4], 'A1B2C3D4');
+  flow.retry();
+  await flow.step();
+  assert.equal(calls, 1); // a normal retry cannot clear uncertainty
+  assert.equal(states.at(-1)[0], 'remove');
+});
+
 test('screen entered after home auto writes, ignores simulated badge, waits removal and stops on navigation', async () => {
   const dom = new JSDOM('<div id="app">Home</div>', { url: 'https://hotel/totem/', runScripts: 'outside-only' });
   const w = dom.window;

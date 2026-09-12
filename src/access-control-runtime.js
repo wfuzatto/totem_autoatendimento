@@ -119,6 +119,14 @@ function installAccessControlRuntime(app) {
     catch (_) { return { validFrom: null, validUntil: null }; }
   }
 
+  function hasConfirmedVendorWriteFailure(error) {
+    const failure = error?.details?.writeFailure;
+    return error?.code === 'bis_api_vendor_write_failed'
+      && failure?.written === false
+      && Number.isInteger(failure.vendorResult)
+      && failure.vendorResult !== 0;
+  }
+
   function accessContext(res) {
     const blockers = blockersFor(res);
     const window = resolvedWindow(res);
@@ -224,6 +232,53 @@ function installAccessControlRuntime(app) {
       return res.json({ ok: true, provider: 'bis_api', present: card.present, reader: card.reader, uidHex: card.uidHex || null, awaiting_removal: awaitingRemoval });
     } catch (error) {
       return res.json({ ok: false, provider: 'bis_api', present: null, error: error.message, code: error.code || 'bis_api_error' });
+    } finally { readerBusy = false; }
+  });
+
+  app.post('/api/reservations/:id/wristbands/:guestId/recover', express.json({ limit: '1mb' }), async (req, res) => {
+    const id = Number(req.params.id);
+    const guestId = Number(req.params.guestId);
+    const current = reservation(id);
+    if (!current) return res.status(404).json({ error: 'Reserva não encontrada.' });
+    if (provider() !== 'bis_api') return res.status(409).json({ error: 'Recuperação disponível somente para o BisApi.', code: 'provider_not_real' });
+
+    const guest = db.prepare('SELECT * FROM guests WHERE id=? AND reservation_id=? AND adult=1').get(guestId, id);
+    if (!guest) return res.status(404).json({ error: 'Hóspede adulto não encontrado.' });
+    const previous = db.prepare("SELECT * FROM wristband_credentials WHERE reservation_id=? AND guest_id=? AND provider='bis_api'").get(id, guestId);
+    if (previous?.status !== 'uncertain') {
+      return res.status(409).json({ error: 'Não existe uma gravação incerta a recuperar para esta pulseira.', code: 'recovery_not_needed' });
+    }
+
+    const expectedUid = String(req.body?.expected_uid || '').trim().toUpperCase();
+    if (!bisApi.validUid(expectedUid)) {
+      return res.status(400).json({ error: 'UID da pulseira inválido para recuperação.', code: 'uid_invalid' });
+    }
+    if (readerBusy) return res.status(409).json({ error: 'Leitor ocupado. Aguarde a conclusão da operação atual.', code: 'reader_busy' });
+
+    readerBusy = true;
+    try {
+      const status = await bisApi.hardwareStatus();
+      if (!status.ready_for_write) throw new bisApi.BisApiError(status.error, { status: 503, code: status.code });
+      const card = await bisApi.cardStatus(status.reader);
+      if (!card.present) throw new bisApi.BisApiError('Aproxime a mesma pulseira antes de confirmar a reemissão.', { status: 409, code: 'card_absent' });
+      if (card.uidHex !== expectedUid) throw new bisApi.BisApiError('A pulseira no leitor não corresponde à tentativa anterior.', { status: 409, code: 'card_changed' });
+
+      const duplicate = db.prepare("SELECT guest_id FROM wristband_credentials WHERE reservation_id=? AND provider='bis_api' AND status='encoded' AND wristband_code=? AND guest_id<>?")
+        .get(id, card.uidHex, guestId);
+      if (duplicate) throw new bisApi.BisApiError('Esta pulseira já pertence a outro hóspede da reserva. Aproxime outra pulseira.', { status: 409, code: 'uid_in_use' });
+
+      db.prepare("UPDATE wristband_credentials SET status='failed',last_error='Reemissão autorizada após confirmação física da pulseira.',updated_at=CURRENT_TIMESTAMP WHERE id=?")
+        .run(previous.id);
+      awaitingRemoval = true;
+      removalNoCardReads = 0;
+      audit('wristband.encode.recovery_confirmed', id, { guest_id: guestId, provider: 'bis_api', room_number: current.room_number, uid: card.uidHex });
+      return res.json({ ok: true, provider: 'bis_api', recovered: true, code: card.uidHex, instruction: 'Retire a pulseira antes da nova tentativa.' });
+    } catch (error) {
+      return res.status(Number(error?.status || 502)).json({
+        error: error?.message || 'Não foi possível confirmar a recuperação da pulseira.',
+        code: error?.code || 'recovery_failed',
+        provider: 'bis_api'
+      });
     } finally { readerBusy = false; }
   });
 
@@ -412,11 +467,18 @@ function installAccessControlRuntime(app) {
       });
     } catch (error) {
       const message = error?.message || 'Falha ao gravar pulseira no bis_api.';
+      // Timeouts, disconnects and malformed responses may leave the physical
+      // outcome unknown and remain locked for review. A documented
+      // Written=false + non-zero vendor result comes from the codec after its
+      // call completed, so it is a confirmed failure: the guest can retry
+      // deliberately after removing the same pulseira.
+      const confirmedVendorFailure = hasConfirmedVendorWriteFailure(error);
+      const outcomeUncertain = (writeDispatched && !confirmedVendorFailure) || error.code === 'write_uncertain';
       upsertCredential({
         current,
         guest,
         selectedProvider,
-        status: writeDispatched || error.code === 'write_uncertain' ? 'uncertain' : 'failed',
+        status: outcomeUncertain ? 'uncertain' : 'failed',
         validFrom: window.validFrom,
         validUntil: window.validUntil,
         lastError: message
@@ -432,7 +494,7 @@ function installAccessControlRuntime(app) {
         error: message,
         code: error?.code || 'bis_api_error',
         provider: selectedProvider,
-        retryable: !writeDispatched && error.code !== 'write_uncertain',
+        retryable: confirmedVendorFailure || (!writeDispatched && error.code !== 'write_uncertain'),
         access: accessContext(current)
       });
     } finally {
