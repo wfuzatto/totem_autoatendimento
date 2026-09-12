@@ -6,6 +6,7 @@ const gateway = require('./payment-gateway');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const waitMs = Math.max(1000, Number(process.env.PAYMENT_UI_WAIT_MS || 90000));
 const pollMs = Math.max(250, Number(process.env.PAYMENT_UI_POLL_MS || 750));
+const allowLegacyTestMock = () => process.env.NODE_ENV === 'test' && process.env.PAYMENT_ALLOW_LEGACY_MOCK === '1';
 
 function localPayment(id) {
   return db.prepare('SELECT * FROM payments WHERE id=?').get(id);
@@ -47,6 +48,8 @@ async function waitForTerminal(row) {
 function installPaymentRuntime(app) {
   app.post('/api/reservations/:id/payment', express.json(), async (req, res, next) => {
     try {
+      // Compatibilidade EXCLUSIVA da suíte histórica. Produção nunca habilita esta flag.
+      if (!gateway.configured() && allowLegacyTestMock()) return next('route');
       const reservationId = Number(req.params.id);
       const method = String(req.body?.method || 'pix').toLowerCase();
       if (!['pix','debit','credit'].includes(method)) return res.status(400).json({ error: 'Forma de pagamento inválida.' });
