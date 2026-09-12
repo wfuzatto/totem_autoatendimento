@@ -29,8 +29,15 @@ function installAccessControlRuntime(app) {
 
   const boolSetting = key => getSetting(key) === '1';
   const money = value => Number(value || 0);
-  const provider = () => String(process.env.HOTEL_CARD_PROVIDER || 'mock').trim().toLowerCase() || 'mock';
+  const provider = () => String(process.env.HOTEL_CARD_PROVIDER || (process.env.NODE_ENV === 'production' ? 'bis_api' : 'mock')).trim().toLowerCase();
   const encodingInFlight = new Set();
+  let readerBusy = false;
+  let awaitingRemoval = false;
+
+  function realCredential(guestId) {
+    const row = db.prepare("SELECT * FROM wristband_credentials WHERE guest_id=? AND provider='bis_api' AND status='encoded'").get(guestId);
+    return row && bisApi.validUid(row.wristband_code) ? row : null;
+  }
 
   function reservation(id) {
     const row = db.prepare('SELECT * FROM reservations WHERE id=?').get(id);
@@ -65,6 +72,7 @@ function installAccessControlRuntime(app) {
   }
 
   function adultWristbandsEncoded(id) {
+    if (provider() === 'bis_api') return guests(id).filter(g => g.adult).every(g => realCredential(g.id));
     const row = db.prepare(`
       SELECT COUNT(*) AS total,
              SUM(CASE WHEN wristband_code IS NOT NULL AND wristband_code != '' THEN 1 ELSE 0 END) AS encoded
@@ -121,6 +129,10 @@ function installAccessControlRuntime(app) {
       valid_from: window.validFrom,
       valid_until: window.validUntil,
       provider: provider(),
+      credentials: guests(res.id).filter(g => g.adult).map(g => ({
+        guest_id: g.id,
+        uid: provider() === 'bis_api' ? realCredential(g.id)?.wristband_code || null : g.wristband_code || null
+      })),
       ready_for_wristband: blockers.length === 0,
       blockers,
       bis_api: provider() === 'bis_api' ? {
@@ -184,69 +196,27 @@ function installAccessControlRuntime(app) {
   });
 
   app.get('/api/access-control/status', async (_req, res) => {
-    const selectedProvider = provider();
-    if (selectedProvider !== 'bis_api') {
-      return res.json({ ok: true, provider: selectedProvider, online: true, mock: selectedProvider === 'mock' });
-    }
-
-    const config = bisApi.providerConfig();
-    if (!config.url) {
-      return res.json({ ok: false, provider: selectedProvider, online: false, configured: false, error: 'BIS_API_URL não configurada.' });
-    }
-
-    try {
-      const health = await bisApi.health();
-      const vendor = health?.vendor || health?.Vendor || {};
-      const configuredReader = vendor?.pcscReader || vendor?.PcscReader || null;
-      let reader = { readers: [], reader: configuredReader, present: false };
-      try { reader = await bisApi.readerStatus(configuredReader); } catch (_) {}
-      return res.json({
-        ok: true,
-        provider: selectedProvider,
-        online: true,
-        configured: true,
-        service: health?.service || 'bis_api',
-        process_architecture: health?.processArchitecture || health?.ProcessArchitecture || null,
-        codec_present: Boolean(vendor?.codecPresent ?? vendor?.CodecPresent),
-        pcsc_shim_present: Boolean(vendor?.pcscShimPresent ?? vendor?.PcscShimPresent),
-        writes_enabled: Boolean(vendor?.hotelCardWritesEnabled ?? vendor?.HotelCardWritesEnabled),
-        hotel_password_configured: Boolean(vendor?.hotelPasswordConfigured ?? vendor?.HotelPasswordConfigured),
-        reader: configuredReader,
-        reader_present: reader.present,
-        available_readers: reader.readers,
-        ready_for_write: Boolean(
-          vendor?.codecPresent ?? vendor?.CodecPresent
-        ) && Boolean(vendor?.pcscShimPresent ?? vendor?.PcscShimPresent)
-          && Boolean(vendor?.hotelCardWritesEnabled ?? vendor?.HotelCardWritesEnabled)
-          && Boolean(vendor?.hotelPasswordConfigured ?? vendor?.HotelPasswordConfigured)
-          && reader.present,
-        datetime_format: vendor?.dateTimeFormat || vendor?.DateTimeFormat || null
-      });
-    } catch (error) {
-      return res.json({
-        ok: false,
-        provider: selectedProvider,
-        online: false,
-        configured: true,
-        error: error.message,
-        code: error.code || 'bis_api_error'
-      });
-    }
+    res.set('Cache-Control', 'no-store');
+    if (provider() === 'mock') return res.json({ ok: true, provider: 'mock', mock: true, online: true });
+    if (provider() !== 'bis_api') return res.json({ ok: false, provider: provider(), error: 'Provedor de gravação inválido.' });
+    return res.json(await bisApi.hardwareStatus());
   });
 
   app.get('/api/access-control/card-status', async (_req, res) => {
-    if (provider() !== 'bis_api') return res.json({ ok: true, provider: provider(), present: false, mock: true });
+    res.set('Cache-Control', 'no-store');
+    if (provider() !== 'bis_api') return res.json({ ok: false, provider: provider(), error: 'Gravação real não configurada.' });
+    if (readerBusy) return res.json({ ok: true, provider: 'bis_api', busy: true, present: null, awaiting_removal: awaitingRemoval });
+    readerBusy = true;
     try {
-      const health = await bisApi.health();
-      const vendor = health?.vendor || health?.Vendor || {};
-      const configuredReader = vendor?.pcscReader || vendor?.PcscReader || '';
-      const reader = await bisApi.readerStatus(configuredReader);
-      if (!reader.present) return res.json({ ok: true, provider: 'bis_api', present: false, reader: configuredReader || null });
-      const card = await bisApi.cardStatus(reader.reader);
-      return res.json({ ok: true, provider: 'bis_api', present: card.present, reader: card.reader || reader.reader, uidHex: card.uidHex || null });
+      const status = await bisApi.hardwareStatus();
+      if (!status.ready_for_write) return res.json({ ...status, present: null });
+      const card = await bisApi.cardStatus(status.reader);
+      // Only an explicit PC/SC no-card response counts as removal. Disconnects and HTTP errors do not.
+      if (card.present === false) awaitingRemoval = false;
+      return res.json({ ok: true, provider: 'bis_api', present: card.present, reader: card.reader, uidHex: card.uidHex || null, awaiting_removal: awaitingRemoval });
     } catch (error) {
-      return res.json({ ok: false, provider: 'bis_api', present: false, error: error.message, code: error.code || 'bis_api_error' });
-    }
+      return res.json({ ok: false, provider: 'bis_api', present: null, error: error.message, code: error.code || 'bis_api_error' });
+    } finally { readerBusy = false; }
   });
 
   app.post('/api/reservations/:id/wristbands/encode', express.json({ limit: '1mb' }), async (req, res) => {
@@ -264,11 +234,12 @@ function installAccessControlRuntime(app) {
     const guest = db.prepare('SELECT * FROM guests WHERE id=? AND reservation_id=? AND adult=1').get(guestId, id);
     if (!guest) return res.status(404).json({ error: 'Hóspede adulto não encontrado.' });
 
-    if (guest.wristband_code) {
+    const existingCode = provider() === 'bis_api' ? realCredential(guestId)?.wristband_code : guest.wristband_code;
+    if (existingCode) {
       return res.json({
         ok: true,
         already_encoded: true,
-        code: guest.wristband_code,
+        code: existingCode,
         provider: provider(),
         access: accessContext(current)
       });
@@ -319,13 +290,29 @@ function installAccessControlRuntime(app) {
     }
 
     const lockKey = `${id}:${guestId}`;
-    if (encodingInFlight.has(lockKey)) {
+    if (encodingInFlight.has(lockKey) || readerBusy) {
       return res.status(409).json({ error: 'Já existe uma gravação em andamento para este hóspede. Aguarde a conclusão.' });
     }
     encodingInFlight.add(lockKey);
+    readerBusy = true;
 
     let window = { validFrom: null, validUntil: null };
+    let writeDispatched = false;
     try {
+      const previous = db.prepare('SELECT status FROM wristband_credentials WHERE guest_id=?').get(guestId);
+      if (['encoding', 'uncertain'].includes(previous?.status)) {
+        throw new bisApi.BisApiError('Resultado anterior incerto. Solicite à recepção a conferência da pulseira antes de reemitir.', { status: 409, code: 'write_uncertain' });
+      }
+      if (awaitingRemoval) throw new bisApi.BisApiError('Retire a pulseira anterior do leitor.', { status: 409, code: 'awaiting_removal' });
+      const status = await bisApi.hardwareStatus();
+      if (!status.ready_for_write) throw new bisApi.BisApiError(status.error, { status: 503, code: status.code });
+      const card = await bisApi.cardStatus(status.reader);
+      if (!card.present) throw new bisApi.BisApiError('Nenhuma pulseira detectada.', { status: 409, code: 'card_absent' });
+      if (!bisApi.validUid(req.body?.expected_uid) || card.uidHex !== String(req.body.expected_uid).toUpperCase()) {
+        throw new bisApi.BisApiError('Pulseira retirada ou trocada antes da gravação.', { status: 409, code: 'card_changed' });
+      }
+      const duplicate = db.prepare("SELECT guest_id FROM wristband_credentials WHERE reservation_id=? AND provider='bis_api' AND status='encoded' AND wristband_code=? AND guest_id<>?").get(id, card.uidHex, guestId);
+      if (duplicate) throw new bisApi.BisApiError('Esta pulseira já pertence a outro hóspede da reserva. Aproxime outra pulseira.', { status: 409, code: 'uid_in_use' });
       window = bisApi.accessWindow(current);
       upsertCredential({
         current,
@@ -343,8 +330,10 @@ function installAccessControlRuntime(app) {
         valid_until: window.validUntil
       });
 
+      writeDispatched = true;
+      awaitingRemoval = true;
       const hardware = await bisApi.encodeHotelCard({ reservation: current, guest });
-      if (!hardware.uidHex) {
+      if (!bisApi.validUid(hardware.uidHex) || hardware.uidHex !== card.uidHex) {
         throw new bisApi.BisApiError('O bis_api confirmou a gravação, mas não retornou o UID do cartão.', {
           status: 502,
           code: 'bis_api_uid_missing',
@@ -418,7 +407,7 @@ function installAccessControlRuntime(app) {
         current,
         guest,
         selectedProvider,
-        status: 'failed',
+        status: writeDispatched || error.code === 'write_uncertain' ? 'uncertain' : 'failed',
         validFrom: window.validFrom,
         validUntil: window.validUntil,
         lastError: message
@@ -434,11 +423,12 @@ function installAccessControlRuntime(app) {
         error: message,
         code: error?.code || 'bis_api_error',
         provider: selectedProvider,
-        retryable: true,
+        retryable: !writeDispatched && error.code !== 'write_uncertain',
         access: accessContext(current)
       });
     } finally {
       encodingInFlight.delete(lockKey);
+      readerBusy = false;
     }
   });
 

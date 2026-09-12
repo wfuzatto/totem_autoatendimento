@@ -429,23 +429,26 @@
 
   function renderCheckinWristbands() {
     stopCamera();
-    const adults = state.reservation.guests.filter(g => g.adult);
-    const next = adults.find(g => !g.wristband_code);
-    app.innerHTML = `<section class="panel-card">
-      ${flowHeader(7, 'Grave as pulseiras', `Pagamento confirmado. Agora será gravada uma pulseira NFC para cada hóspede adulto (${adults.length}).`)}
-      <div class="scan-box"><i class="bi bi-wifi scan-icon"></i><h2 class="h4 fw-bold mt-3">${next ? `Aproxime a pulseira de ${esc(next.name)}` : 'Todas as pulseiras foram gravadas'}</h2><p class="text-secondary">Leitor/gravador previsto: ACS ACR122U.</p>${next ? '<button class="btn btn-primary btn-touch mt-3" id="encodeBand"><i class="bi bi-broadcast me-2"></i>Gravar pulseira</button>' : '<span class="status-pill status-ok mt-2"><i class="bi bi-check-circle"></i>Concluído</span>'}</div>
-      <div class="wristband-list">${adults.map((g,i) => `<div class="wristband-item"><span><strong>Pulseira ${i+1}</strong> · ${esc(g.name)}</span>${g.wristband_code ? `<span class="status-pill status-ok">Gravada</span>` : `<span class="status-pill status-pending">Aguardando</span>`}</div>`).join('')}</div>
-      ${actions({ onAdvance:'bands-encoded', advanceLabel:'Avançar', advanceDisabled:!!next })}
-    </section>`;
+    const snapshot = state.reservation;
+    const adults = snapshot.guests.filter(g => g.adult);
+    app.innerHTML = '<section class="panel-card">' +
+      flowHeader(7, 'Grave as pulseiras', 'Pagamento confirmado. Será gravada uma pulseira NFC para cada hóspede adulto (' + adults.length + ').') +
+      '<div class="scan-box"><i class="bi bi-wifi scan-icon"></i><h2 class="h4 fw-bold mt-3">Consultando o gravador...</h2><p class="text-secondary">Aguarde a verificação.</p><button class="btn btn-primary btn-touch mt-3" id="encodeBand" disabled>Gravação indisponível</button></div>' +
+      '<div class="wristband-list">' + adults.map((g, i) => '<div class="wristband-item"><span><strong>Pulseira ' + (i + 1) + '</strong> · ' + esc(g.name) + '</span><span class="status-pill status-pending">Verificando</span></div>').join('') + '</div>' +
+      actions({ onAdvance:'bands-encoded', advanceLabel:'Avançar', advanceDisabled:true }) + '</section>';
     bindCancel();
-    if (next) document.getElementById('encodeBand').onclick = async () => {
-      try {
-        const result = await api(`/api/reservations/${state.reservation.reservation.id}/wristbands/encode`, { method:'POST', body:JSON.stringify({ guest_id:next.id }) });
-        notify(`Pulseira gravada: ${result.code}`);
-        state.reservation = await api(`/api/reservations/${state.reservation.reservation.id}`);
+    const screen = app.firstElementChild;
+    if (window.TotemWristbands) window.TotemWristbands.mount({
+      reservationId: snapshot.reservation.id,
+      guests: snapshot.guests,
+      onWritten: async result => {
+        notify((result.provider === 'mock' ? 'Pulseira simulada: ' : 'Pulseira gravada: ') + result.code);
+        const refreshed = await api('/api/reservations/' + snapshot.reservation.id);
+        if (!screen.isConnected) return;
+        state.reservation = refreshed;
         renderCheckinWristbands();
-      } catch(e) { notify(e.message,true); }
-    };
+      }
+    });
     const adv = document.querySelector('[data-action="bands-encoded"]');
     if (adv) adv.onclick = finishCheckin;
   }

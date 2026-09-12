@@ -32,6 +32,21 @@ function providerConfig() {
   };
 }
 
+function configurationError() {
+  const config = providerConfig();
+  try {
+    const url = new URL(config.url);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error();
+  } catch (_) { return 'BIS_API_URL deve ser uma URL HTTP/HTTPS válida, sem credenciais.'; }
+  if (!config.confirmationConfigured) return 'BIS_API_WRITE_CONFIRMATION não configurada no servidor.';
+  try {
+    validateTime(config.checkinTime, 'HOTEL_ACCESS_CHECKIN_TIME');
+    validateTime(config.checkoutTime, 'HOTEL_ACCESS_CHECKOUT_TIME');
+    validateOffset(config.utcOffset);
+  } catch (error) { return error.message; }
+  return null;
+}
+
 function validateTime(value, field) {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
     throw new BisApiError(`${field} deve usar HH:MM.`, { status: 503, code: 'bis_api_config' });
@@ -77,6 +92,8 @@ function accessWindow(reservation) {
 function staticBlockers(reservation) {
   const blockers = [];
   const config = providerConfig();
+  const invalid = configurationError();
+  if (invalid) blockers.push({ code: 'bis_api_config', message: invalid });
   if (!config.url) blockers.push({ code: 'bis_api_url_missing', message: 'BIS_API_URL não está configurada no servidor do Totem.' });
   if (!config.confirmationConfigured) blockers.push({ code: 'bis_api_confirmation_missing', message: 'BIS_API_WRITE_CONFIRMATION não está configurada no servidor do Totem.' });
   if (!config.checkinTime) blockers.push({ code: 'access_checkin_time_missing', message: 'Horário de início do acesso não configurado.' });
@@ -115,14 +132,15 @@ async function requestJson(path, options = {}) {
     let data = {};
     if (text) {
       try { data = JSON.parse(text); }
-      catch (_) { data = { raw: text.slice(0, 1000) }; }
+      catch (_) { throw new BisApiError('Resposta inválida do BisApi.', { code: 'bis_api_invalid_response' }); }
     }
     if (!response.ok) {
-      const message = data?.error || data?.message || `bis_api respondeu HTTP ${response.status}.`;
+      // Arbitrary upstream errors may echo the write challenge. Do not forward them.
+      const message = `Falha ao consultar ou gravar no BisApi (HTTP ${response.status}).`;
       throw new BisApiError(message, {
         status: response.status >= 500 ? 502 : response.status,
         code: 'bis_api_http_error',
-        details: data
+        details: { code: data?.code, operation: data?.operation, httpStatus: response.status }
       });
     }
     return data;
@@ -131,7 +149,7 @@ async function requestJson(path, options = {}) {
     if (error?.name === 'AbortError') {
       throw new BisApiError('Tempo esgotado aguardando o gravador NFC.', { status: 504, code: 'bis_api_timeout' });
     }
-    throw new BisApiError(`Não foi possível conectar ao bis_api: ${error?.message || error}`, {
+    throw new BisApiError('BisApi indisponível. Verifique a conexão com o Windows.', {
       status: 503,
       code: 'bis_api_unreachable'
     });
@@ -152,9 +170,9 @@ async function readerStatus(preferredReader = '') {
   const result = await readers();
   const available = Array.isArray(result?.readers) ? result.readers.map(item => String(item || '').trim()).filter(Boolean) : [];
   const preferred = String(preferredReader || '').trim();
-  const reader = preferred && available.some(item => item.toLowerCase() === preferred.toLowerCase())
+  const reader = preferred
     ? available.find(item => item.toLowerCase() === preferred.toLowerCase())
-    : available.find(item => /acr122/i.test(item)) || available[0] || preferred;
+    : available.find(item => /acr122/i.test(item));
   return { readers: available, reader: reader || null, present: Boolean(reader && available.some(item => item.toLowerCase() === reader.toLowerCase())) };
 }
 
@@ -162,18 +180,56 @@ async function cardStatus(reader = '') {
   const query = reader ? `?reader=${encodeURIComponent(reader)}` : '';
   try {
     const result = await requestJson(`/api/pcsc/probe${query}`);
+    const uidHex = String(result?.uidHex || result?.UidHex || '').trim().toUpperCase();
+    if (!validUid(uidHex)) throw new BisApiError('O leitor não retornou um UID válido.', { code: 'bis_api_uid_missing' });
     return {
       present: true,
       reader: String(result?.reader || result?.Reader || reader || ''),
-      uidHex: String(result?.uidHex || result?.UidHex || result?.uid || result?.Uid || '').trim().toUpperCase(),
-      raw: result
+      uidHex
     };
   } catch (error) {
-    if (error.code === 'bis_api_http_error' && Number(error.status) === 502) {
+    if (error.code === 'bis_api_http_error' && ['0X8010000C', '0X80100069'].includes(String(error.details?.code).toUpperCase())) {
       return { present: false, reader: reader || null, code: error.details?.code || error.details?.Code || null };
     }
     throw error;
   }
+}
+
+function validUid(value) { return /^(?:[0-9A-F]{8}|[0-9A-F]{14}|[0-9A-F]{20})$/i.test(String(value || '')); }
+
+async function hardwareStatus() {
+  const configError = configurationError();
+  const status = { ok: false, provider: 'bis_api', online: false, configured: !configError, ready_for_write: false };
+  if (configError) return { ...status, code: 'bis_api_config', error: configError };
+  try {
+    const result = await health();
+    const vendor = result?.vendor || result?.Vendor || {};
+    Object.assign(status, {
+      online: result.ok === true,
+      process_architecture: result.processArchitecture || result.ProcessArchitecture,
+      codec_present: (vendor.codecPresent ?? vendor.CodecPresent) === true,
+      pcsc_shim_present: (vendor.pcscShimPresent ?? vendor.PcscShimPresent) === true,
+      writes_enabled: (vendor.hotelCardWritesEnabled ?? vendor.HotelCardWritesEnabled) === true,
+      hotel_password_configured: (vendor.hotelPasswordConfigured ?? vendor.HotelPasswordConfigured) === true,
+      reader: vendor.pcscReader || vendor.PcscReader || null,
+      datetime_format: vendor.dateTimeFormat || vendor.DateTimeFormat || null
+    });
+    const reader = await readerStatus(status.reader);
+    status.reader_present = reader.present;
+    status.reader = reader.reader || status.reader;
+    const checks = [
+      [status.online, 'bis_api_offline', 'BisApi indisponível.'],
+      [String(status.process_architecture).toUpperCase() === 'X86', 'architecture', 'BisApi precisa executar em x86.'],
+      [status.codec_present, 'codec_missing', 'Codec BIS ausente.'],
+      [status.pcsc_shim_present, 'shim_missing', 'PC/SC shim ausente.'],
+      [status.reader_present, 'reader_missing', 'ACR122U não encontrado.'],
+      [status.hotel_password_configured, 'hpass_missing', 'HotelPassword/HPASS não configurado no Windows.'],
+      [status.writes_enabled, 'writes_disabled', 'Gravação não habilitada no BisApi.']
+    ];
+    const failure = checks.find(([ready]) => !ready);
+    if (failure) return { ...status, code: failure[1], error: failure[2] };
+    return { ...status, ok: true, ready_for_write: true, code: 'ready' };
+  } catch (error) { return { ...status, code: error.code || 'bis_api_error', error: error.message }; }
 }
 
 function resultField(result, camel, pascal) {
@@ -203,9 +259,9 @@ async function encodeHotelCard({ reservation, guest }) {
     body: JSON.stringify(payload)
   });
 
-  const written = Boolean(resultField(result, 'written', 'Written'));
+  const written = resultField(result, 'written', 'Written') === true;
   if (!written) {
-    throw new BisApiError(resultField(result, 'message', 'Message') || 'O bis_api não confirmou a gravação do cartão.', {
+    throw new BisApiError('O bis_api não confirmou a gravação do cartão.', {
       status: 502,
       code: 'bis_api_write_rejected',
       details: result
@@ -216,7 +272,7 @@ async function encodeHotelCard({ reservation, guest }) {
     payload: { ...payload, Confirmation: undefined },
     written,
     vendorResult: Number(resultField(result, 'vendorResult', 'VendorResult') ?? 0),
-    message: String(resultField(result, 'message', 'Message') || 'Sucesso'),
+    message: 'Pulseira gravada.',
     reader: String(resultField(result, 'reader', 'Reader') || ''),
     uidHex: String(resultField(result, 'uidHex', 'UidHex') || '').trim().toUpperCase(),
     doorId: String(resultField(result, 'doorId', 'DoorId') || payload.RoomOrDoorId),
@@ -236,6 +292,9 @@ async function encodeHotelCard({ reservation, guest }) {
 module.exports = {
   BisApiError,
   providerConfig,
+  configurationError,
+  hardwareStatus,
+  validUid,
   staticBlockers,
   accessWindow,
   health,

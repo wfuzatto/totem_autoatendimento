@@ -46,7 +46,7 @@ test('Totem grava pulseira pelo bis_api e só persiste UID após confirmação r
     if (req.method === 'GET' && req.url.startsWith('/api/pcsc/probe')) {
       if (!cardPresent) {
         res.statusCode = 502;
-        res.end(JSON.stringify({ code: 'SCARD_E_NO_SMARTCARD', error: 'Nenhum cartão presente.' }));
+        res.end(JSON.stringify({ code: '0x8010000C', error: 'Nenhum cartão presente.' }));
         return;
       }
       res.end(JSON.stringify({ reader: 'ACS ACR122 0', uidHex: 'A1B2C3D4' }));
@@ -146,7 +146,7 @@ test('Totem grava pulseira pelo bis_api e só persiste UID após confirmação r
 
   const encoded = await request(app)
     .post(`/api/reservations/${reservationId}/wristbands/encode`)
-    .send({ guest_id: adults[0].id });
+    .send({ guest_id: adults[0].id, expected_uid: 'A1B2C3D4' });
 
   assert.equal(encoded.status, 200);
   assert.equal(encoded.body.ok, true);
@@ -179,15 +179,20 @@ test('Totem grava pulseira pelo bis_api e só persiste UID após confirmação r
   assert.match(credential.external_reference, /123456/);
 
   encodeMode = 'failure';
+  cardPresent = false;
+  await request(app).get('/api/access-control/card-status');
+  cardPresent = true;
+  // Isolate upstream failure from the separate duplicate-UID protection.
+  db.prepare("UPDATE wristband_credentials SET wristband_code='11223344' WHERE guest_id=?").run(adults[0].id);
   const failed = await request(app)
     .post(`/api/reservations/${reservationId}/wristbands/encode`)
-    .send({ guest_id: adults[1].id });
+    .send({ guest_id: adults[1].id, expected_uid: 'A1B2C3D4' });
 
   assert.equal(failed.status, 502);
-  assert.match(failed.body.error, /Falha de gravação/i);
+  assert.match(failed.body.error, /Falha.*BisApi/i);
   assert.equal(db.prepare('SELECT wristband_code FROM guests WHERE id=?').get(adults[1].id).wristband_code, null);
   const failedCredential = db.prepare('SELECT * FROM wristband_credentials WHERE reservation_id=? AND guest_id=?')
     .get(reservationId, adults[1].id);
-  assert.equal(failedCredential.status, 'failed');
-  assert.match(failedCredential.last_error, /Falha de gravação/i);
+  assert.equal(failedCredential.status, 'uncertain');
+  assert.match(failedCredential.last_error, /Falha.*BisApi/i);
 });
