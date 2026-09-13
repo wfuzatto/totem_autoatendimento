@@ -38,6 +38,7 @@
       let retryAllowed = false;
       let recoveryUid = '';
       let reviewPending = false;
+      let replacementRequired = false;
       const active = () => !stopped && root.isConnected;
       const observer = new MutationObserver(() => { if (!root.isConnected) stop(); });
       const stop = () => { stopped = true; clearTimeout(timer); observer.disconnect(); };
@@ -49,29 +50,34 @@
         retryAllowed = retry;
         recoveryUid = recoverUid;
         const rejectedByHotel = name === 'error' && /BIS código 5|código deste hotel|código 5/i.test(String(text || ''));
+        replacementRequired = rejectedByHotel;
         message.textContent = text + (uid ? ' UID: ' + uid : '');
         message.className = 'fw-bold mt-3 ' + (name === 'error' ? 'text-danger' : 'text-success');
         scan.dataset.nfcState = rejectedByHotel ? 'replace-card' : name;
-        button.hidden = !next;
+
         const recoveringUncertainWrite = name === 'error' && Boolean(recoveryUid);
-        const nonRetryableError = name === 'error' && !retry && !recoveringUncertainWrite && !rejectedByHotel;
-        button.disabled = !ready || name === 'writing' || nonRetryableError;
-        button.textContent = name === 'writing'
-          ? 'Gravando pulseira...'
-          : guard.waitingRemoval ? 'Confirmar retirada da pulseira'
-            : rejectedByHotel ? 'Ler outra pulseira e gravar'
-              : recoveringUncertainWrite ? 'Conferir pulseira'
-                : name === 'error' && retry ? 'Tentar novamente'
-                  : 'Ler e gravar pulseira · UH ' + (context?.room_number || '—');
+        const manualRetry = name === 'error' && retry && !rejectedByHotel;
+        const mockAction = context?.provider === 'mock' && Boolean(next);
+        const manualAction = Boolean(next) && (recoveringUncertainWrite || manualRetry || mockAction);
+        button.hidden = !manualAction;
+        button.disabled = !ready || name === 'writing';
+        button.textContent = recoveringUncertainWrite
+          ? 'Conferir pulseira'
+          : manualRetry ? 'Tentar novamente'
+            : mockAction ? 'Simular gravação'
+              : 'Aguarde...';
+
         if (rejectedByHotel) {
           helper.textContent = guard.waitingRemoval
-            ? 'Retire completamente esta pulseira do leitor e toque em confirmar retirada.'
-            : 'Aproxime outra pulseira preparada para esta unidade e toque em ler e gravar.';
+            ? 'Retire completamente esta pulseira do leitor. O sistema está aguardando a retirada antes de aceitar outra.'
+            : 'Aproxime outra pulseira preparada para esta unidade. Ela será detectada e processada automaticamente.';
         }
         if (name === 'remove') {
-          helper.textContent = 'Retire completamente a pulseira do leitor e toque no botão para confirmar. O leitor não fica consultando em loop.';
+          helper.textContent = 'Retire completamente a pulseira do leitor. O sistema está aguardando a retirada e só então liberará a próxima.';
         }
-        if (!ready) button.textContent = 'Gravação indisponível';
+        if (name === 'waiting' && !replacementRequired && context?.provider === 'bis_api') {
+          helper.textContent = 'Aproxime a pulseira do leitor. A detecção, a gravação e a confirmação acontecem automaticamente.';
+        }
         if (advance) advance.disabled = Boolean(next) || !context || !ready || guard.waitingRemoval;
       }
 
@@ -97,10 +103,10 @@
         helper.textContent = mock
           ? 'Teste simulado: nenhum cartão físico será gravado.'
           : hasUncertain
-            ? 'Aproxime a pulseira e toque em conferir. Nenhuma nova gravação será feita.'
+            ? 'Aproxime a pulseira e use a conferência segura. Nenhuma nova gravação será feita nesta etapa.'
             : guard.waitingRemoval
-              ? 'Retire completamente a pulseira anterior e toque em confirmar retirada.'
-              : 'Aproxime a pulseira e toque em “Ler e gravar”. O cartão só é acessado quando você tocar no botão.';
+              ? 'Retire completamente a pulseira anterior. O sistema está aguardando a retirada.'
+              : 'Aproxime a pulseira. O sistema detecta, grava uma única vez, confirma o retorno do BIS e depois aguarda a retirada.';
         root.querySelector('.wristband-list').innerHTML = adults.map((g, i) => {
           const label = g.uid ? (mock ? 'Simulada' : 'Gravada')
             : g.credentialStatus === 'uncertain' ? 'Reconciliação necessária'
@@ -115,8 +121,8 @@
         checkedAt = Date.now();
         if (!ready) state('error', blocker);
         else if (!next && !guard.waitingRemoval) state(reviewPending ? 'error' : 'complete', reviewPending ? 'Uma pulseira exige conferência. As demais podem continuar.' : 'Todas as pulseiras foram gravadas.');
-        else if (guard.waitingRemoval && phase !== 'error') state('remove', 'Retire a pulseira anterior e confirme a retirada.');
-        else if (phase === 'checking') state('waiting', 'Aproxime uma pulseira e toque em ler e gravar.');
+        else if (guard.waitingRemoval && phase !== 'error') state('remove', 'Gravação encerrada. Retire a pulseira do leitor.');
+        else if (phase === 'checking') state('waiting', 'Aguardando pulseira...');
       }
 
       const flow = window.createWristbandFlow({
@@ -151,7 +157,7 @@
             flow.retry({ force: true });
             guard.waitingRemoval = true;
             guard.removalReads = 0;
-            state('remove', 'Reemissão autorizada. Retire a pulseira do leitor e confirme a retirada.');
+            state('remove', 'Reemissão autorizada. Retire a pulseira do leitor.');
           } catch (error) {
             if (active()) state('error', error.message, false, '', uid);
           }
@@ -165,20 +171,39 @@
           } catch (error) { if (active()) state('error', error.message, true); }
           return;
         }
-        if (phase === 'error' && retryAllowed) flow.retry();
-        await flow.step();
+        if (phase === 'error' && retryAllowed) {
+          flow.retry();
+          state('waiting', 'Nova tentativa autorizada. Aguardando pulseira...');
+        }
       };
 
       async function tick() {
         if (!active()) return;
         try {
-          // Mantemos apenas o health/contexto atualizados. Não tocamos no cartão
-          // automaticamente: card-status e gravação só acontecem ao tocar no botão.
           if (!context || Date.now() - checkedAt > 3000) await refresh();
-          if (active() && !next && ready && !guard.waitingRemoval) state(reviewPending ? 'error' : 'complete', reviewPending ? 'Uma pulseira exige conferência. As demais podem continuar.' : 'Todas as pulseiras foram gravadas.');
-        } catch (error) { ready = false; if (active()) state('error', error.message); }
-        finally { if (active()) timer = setTimeout(tick, 1500); }
+
+          // Fluxo automático, mas com escrita one-shot por apresentação física:
+          // 1) espera/detecta a pulseira; 2) grava uma vez; 3) aguarda a retirada;
+          // 4) somente depois libera a próxima. Erros de reemissão incerta e
+          // retries genéricos continuam exigindo ação explícita do operador.
+          const canAutoProbe = active()
+            && ready
+            && context?.provider === 'bis_api'
+            && !recoveryUid
+            && (guard.waitingRemoval || (next && (phase !== 'error' || replacementRequired)));
+
+          if (canAutoProbe) await flow.step();
+          if (active() && !next && ready && !guard.waitingRemoval) {
+            state(reviewPending ? 'error' : 'complete', reviewPending ? 'Uma pulseira exige conferência. As demais podem continuar.' : 'Todas as pulseiras foram gravadas.');
+          }
+        } catch (error) {
+          ready = false;
+          if (active()) state('error', error.message);
+        } finally {
+          if (active()) timer = setTimeout(tick, 1200);
+        }
       }
+
       state('checking', 'Consultando o gravador...');
       tick();
     }
