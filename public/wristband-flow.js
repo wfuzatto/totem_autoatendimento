@@ -6,6 +6,19 @@
     let inFlight = false;
     let failed = null;
     const requiresCardReplacement = error => /BIS código 5|código deste hotel|código 5/i.test(String(error?.message || ''));
+
+    async function confirmRemoval(firstRead) {
+      if (firstRead.present !== false) return false;
+      if (!firstRead.awaiting_removal) return true;
+
+      // O backend exige duas leituras consecutivas sem cartão para diferenciar
+      // uma retirada real de uma oscilação momentânea do PC/SC. Fazemos essa
+      // segunda confirmação somente dentro da ação manual do usuário, nunca em loop.
+      const confirmation = await readCard();
+      if (!active()) return false;
+      return confirmation.present === false && confirmation.awaiting_removal !== true;
+    }
+
     return {
       retry({ force = false } = {}) { if (force || failed?.retryable !== false) failed = null; },
       async step() {
@@ -19,28 +32,36 @@
           if (!card.ok) throw new Error(card.error || 'Gravação indisponível.');
           if (card.busy) { onState('busy', 'Leitor ocupado. Aguarde...'); return; }
           if (card.awaiting_removal) guard.waitingRemoval = true;
+
           if (card.present === false) {
             if (guard.waitingRemoval) {
-              guard.removalReads = (guard.removalReads || 0) + 1;
-              if (card.awaiting_removal || guard.removalReads < 2) {
-                onState('remove', 'Retire a pulseira do leitor.');
+              onState('remove', 'Confirmando que a pulseira anterior foi retirada...');
+              const removed = await confirmRemoval(card);
+              if (!removed) {
+                onState('remove', 'Retire completamente a pulseira do leitor e confirme novamente.');
                 return;
               }
               guard.waitingRemoval = false;
               guard.removalReads = 0;
+              if (failed) onState('error', failed.message, failed.retryable !== false);
+              else onState('waiting', 'Pulseira anterior retirada. Aproxime a próxima e toque em gravar.');
+              return;
             }
             if (failed) onState('error', failed.message, failed.retryable !== false);
-            else onState('waiting', 'Aguardando pulseira...');
+            else onState('waiting', 'Nenhuma pulseira detectada. Aproxime uma pulseira e toque em gravar.');
             return;
           }
+
           guard.removalReads = 0;
-          if (guard.waitingRemoval) { onState('remove', 'Retire a pulseira do leitor.'); return; }
+          if (guard.waitingRemoval) {
+            onState('remove', 'Retire a pulseira anterior do leitor antes de continuar.');
+            return;
+          }
 
           if (failed) {
             // Código 5 do BIS é uma rejeição determinística da autenticação do
-            // cartão. Repetir o MESMO UID não pode resolver. Assim que uma
-            // pulseira fisicamente diferente é apresentada, limpamos apenas o
-            // erro local e deixamos o backend fazer a nova tentativa normal.
+            // cartão. Repetir o MESMO UID não pode resolver. Uma pulseira
+            // fisicamente diferente libera uma única nova tentativa manual.
             if (failed.rejectedUid && card.uidHex && card.uidHex !== failed.rejectedUid) {
               failed = null;
             } else {
