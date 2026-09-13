@@ -272,7 +272,8 @@
     webcam.classList.add('hardware-runtime-card');
 
     const webcamStatus = webcam.querySelector('.text-secondary');
-    if (webcamStatus) webcamStatus.textContent = cameraStatusText();
+    const nextWebcamStatus = cameraStatusText();
+    if (webcamStatus && webcamStatus.textContent !== nextWebcamStatus) webcamStatus.textContent = nextWebcamStatus;
 
     const printerSelect = printer.querySelector('[data-setting="printer_mode"]');
     if (printerSelect) {
