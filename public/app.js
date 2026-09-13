@@ -383,10 +383,30 @@
   }
 
   function renderCheckinFace() {
-    if (!state.config.require_face_match) return renderCheckinPaymentGate();
     const adults = state.reservation.guests.filter(g => g.adult);
-    const next = adults.find(g => !g.face_verified);
-    if (!next) { stopCamera(); return renderCheckinPaymentGate(); }
+    const faceRequired = Boolean(state.config.require_face_match);
+    const next = faceRequired ? adults.find(g => !g.face_verified) : null;
+
+    if (!next) {
+      stopCamera();
+      const subtitle = faceRequired
+        ? 'A validação facial de todos os hóspedes adultos já foi concluída.'
+        : 'A validação facial não é exigida pela configuração atual, mas esta etapa continua visível no fluxo.';
+      app.innerHTML = `<section class="panel-card">
+        ${flowHeader(5, 'Validação facial', subtitle)}
+        <div class="scan-box">
+          <i class="bi bi-person-check-fill scan-icon text-success"></i>
+          <h2 class="h4 fw-bold mt-3">${faceRequired ? 'Validação facial concluída' : 'Etapa sem ação necessária'}</h2>
+          <p class="text-secondary mb-0">${faceRequired ? 'Todos os hóspedes adultos já estão com a identidade confirmada.' : 'Nenhuma captura facial é necessária para esta reserva.'}</p>
+        </div>
+        ${adults.length ? `<div class="guest-section mt-4">${adults.map(g => `<div class="document-row px-3"><div><strong>${esc(g.name)}</strong><br><small class="text-secondary">Validação facial</small></div><span class="status-pill ${g.face_verified ? 'status-ok' : 'status-pending'}"><i class="bi ${g.face_verified ? 'bi-check-circle' : 'bi-info-circle'}"></i>${g.face_verified ? 'Concluída' : 'Não exigida'}</span></div>`).join('')}</div>` : ''}
+        ${actions({ onAdvance:'face-complete', advanceLabel:'Avançar para pagamento' })}
+      </section>`;
+      bindCancel();
+      document.querySelector('[data-action="face-complete"]').onclick = renderCheckinPaymentGate;
+      return;
+    }
+
     app.innerHTML = `<section class="panel-card">
       ${flowHeader(5, 'Validação facial', `Posicione ${next.name} em frente à câmera para comparar o rosto com o documento enviado.`)}
       <div class="camera-box"><video id="cameraVideo" autoplay playsinline muted></video><canvas id="cameraCanvas" class="d-none"></canvas><div class="face-guide"></div></div>
@@ -424,7 +444,15 @@
     }
     const reservation = state.reservation.reservation;
     if (reservation.payment_pending || Number(reservation.balance_cents || 0) > 0) return renderCheckinPayment();
-    return renderCheckinWristbands();
+
+    app.innerHTML = `<section class="panel-card">
+      ${flowHeader(6, 'Pagamento', 'O pagamento desta reserva já está regularizado.')}
+      <div class="total-bar"><span>Saldo pendente</span><strong>${fmtMoney(reservation.balance_cents || 0)}</strong></div>
+      <div class="alert alert-success mt-4"><i class="bi bi-check-circle-fill me-2"></i><strong>Pagamento confirmado.</strong> Não há valores pendentes antes da gravação das pulseiras.</div>
+      ${actions({ onAdvance:'payment-complete', advanceLabel:'Avançar para pulseiras' })}
+    </section>`;
+    bindCancel();
+    document.querySelector('[data-action="payment-complete"]').onclick = renderCheckinWristbands;
   }
 
   function renderCheckinWristbands() {
