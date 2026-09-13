@@ -11,9 +11,10 @@
   position: absolute;
   left: 50%;
   top: 49%;
+  right: auto;
+  bottom: auto;
   width: 42%;
   height: 64%;
-  inset: auto;
   transform: translate(-50%, -50%);
   border: 4px solid #f2c94c;
   border-radius: 48% 48% 44% 44%;
