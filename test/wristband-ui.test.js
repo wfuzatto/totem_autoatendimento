@@ -75,7 +75,8 @@ test('screen entered after home auto writes, ignores simulated badge, waits remo
   present = true; await tick(); assert.equal(calls, 1);
   await tick(); assert.equal(calls, 1);
   assert.match(w.document.body.textContent, /Retire a pulseira/);
-  assert.equal(w.document.getElementById('encodeBand').disabled, true);
+  const encodeButton = w.document.getElementById('encodeBand');
+  assert.ok(encodeButton.hidden || encodeButton.disabled, 'o fluxo normal nao deve exigir botao manual');
   present = false; await tick(); await tick(); present = true; uid = 'AABBCCDD'; await tick();
   assert.equal(calls, 2);
   present = false; await tick(); await tick();
