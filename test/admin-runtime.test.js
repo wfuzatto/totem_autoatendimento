@@ -2,15 +2,17 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { getSetting } = require('../src/db');
+const { init, getSetting } = require('../src/db');
 const { initAdminRuntime, writeAdminSettings, publicConfig } = require('../src/admin-runtime');
+
+init();
+initAdminRuntime();
 
 function restore(key, value) {
   writeAdminSettings({ [key]: value });
 }
 
 test('admin runtime persists loading screen and virtual keyboard toggles', () => {
-  initAdminRuntime();
   const previousLoading = getSetting('enable_loading_screen') ?? '1';
   const previousKeyboard = getSetting('enable_virtual_keyboard') ?? '1';
 
