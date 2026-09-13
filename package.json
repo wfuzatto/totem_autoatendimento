@@ -9,7 +9,7 @@
     "start": "node src/server-main.js",
     "dev": "node --watch src/server-main.js",
     "kiosk": "electron .",
-    "check": "node --check src/server-main.js && node --check src/payment-gateway.js && node --check src/payment-runtime.js",
+    "check": "node --check src/server-main.js && node --check src/payment-gateway.js && node --check src/payment-runtime.js && node --check src/admin-runtime.js && node --check public/runtime-controls.js",
     "test": "NODE_ENV=test PAYMENT_ALLOW_LEGACY_MOCK=1 node --test test/*.test.js"
   },
   "engines": {
