@@ -11,7 +11,6 @@ const { installDocumentRemovalRuntime } = require('./document-removal-runtime');
 const { installFaceScannerRuntime } = require('./face-scanner-runtime');
 const { installAccessControlRuntime } = require('./access-control-runtime');
 const { installPaymentRuntime } = require('./payment-runtime');
-const { installAdminRuntime } = require('./admin-runtime');
 
 installCheckoutRuntime(runtimeApp);
 installDocumentRemovalRuntime(runtimeApp);
@@ -131,10 +130,6 @@ installPaymentRuntime(app);
 // comportamento legado: pagamento, documentos, biometria e UH do PMS precisam
 // estar válidos antes de qualquer gravação de pulseira.
 installAccessControlRuntime(app);
-
-// O dashboard administrativo também precisa refletir os providers efetivos do
-// runtime Docker, e não os campos legados de simulação do MVP antigo.
-installAdminRuntime(app);
 
 app.post('/api/reservations/:id/upload-token', express.json(), (req, res, next) => {
   createUploadToken(req, res).catch(next);
