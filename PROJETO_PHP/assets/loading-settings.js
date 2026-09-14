@@ -40,7 +40,7 @@
   async function inject(){
     if(injecting||document.getElementById('showTransitionLoading'))return;
     const modal=document.querySelector('#modalRoot .modal-card');
-    if(!modal||!/Dashboard de configuração/i.test(modal.textContent||''))return;
+    if(!modal||!/Dashboard de configura/i.test(modal.textContent||''))return;
     const rules=[...modal.querySelectorAll('.section-card')].find(card=>/Regras do fluxo/i.test(card.textContent||''));
     if(!rules)return;
 

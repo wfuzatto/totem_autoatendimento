@@ -160,7 +160,7 @@
 
   function injectSettings(){
     const modal=document.querySelector('#modalRoot .modal-card');
-    if(!modal || !/Dashboard de configuração/i.test(modal.textContent||''))return;
+    if(!modal || !/Dashboard de configura/i.test(modal.textContent||''))return;
     if(document.getElementById('devicePreferencesCard'))return;
 
     const body=modal.querySelector('.modal-body');

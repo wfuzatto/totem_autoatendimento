@@ -21,6 +21,7 @@
       } else if (!state.uid && !state.busy && !state.blocked) {
         state.uid = card.uid || 'present'; state.busy = true; state.busySince = Date.now();
         title('Gravando pulseira…'); note('Mantenha a pulseira sobre o leitor.');
+        window.dispatchEvent(new Event('totem:nfc-auto-start'));
         document.getElementById('encodeBand').click();
       } else if (state.waitingRemoval) {
         title('Retire a pulseira'); note('Aproxime a próxima somente após retirar esta pulseira.');

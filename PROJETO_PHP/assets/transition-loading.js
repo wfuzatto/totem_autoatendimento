@@ -9,6 +9,7 @@
   let activeSince=0;
   let activeKind='';
   let skipGenericUntil=0;
+  let nfcAutoActive=false;
 
   const loadingEnabled=()=>window.TOTEM_LOADING_ENABLED!==false;
 
@@ -168,6 +169,7 @@
       return;
     }
 
+    if(nfcAutoActive)return;
     if(button.closest('#app')&&!button.classList.contains('payment-option')&&!button.matches('#simulateNfc,#simReturn')){
       if(activeKind!=='loading'){
         skipGenericUntil=performance.now()+MIN_LOADING_MS+700;
@@ -182,6 +184,7 @@
     const observer=new MutationObserver(()=>{
       if(firstMutation){firstMutation=false;return;}
       if(!loadingEnabled())return;
+      if(nfcAutoActive)return;
       if(performance.now()<skipGenericUntil)return;
       if(!ensureOverlay().classList.contains('hidden'))return;
       skipGenericUntil=performance.now()+MIN_LOADING_MS+700;
@@ -196,6 +199,10 @@
     window.TOTEM_LOADING_ENABLED=enabled;
     if(!enabled&&activeKind==='loading')forceHide();
   });
+
+  window.addEventListener('totem:nfc-auto-start',()=>{nfcAutoActive=true;forceHide()});
+  window.addEventListener('totem:wristband-written',()=>{nfcAutoActive=false;forceHide()});
+  window.addEventListener('totem:wristband-error',()=>{nfcAutoActive=false;forceHide()});
 
   window.addEventListener('pageshow',()=>{
     if(activeKind!=='error')clearLookupErrorState();
