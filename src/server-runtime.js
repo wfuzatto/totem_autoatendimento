@@ -193,6 +193,8 @@ app.get('/api/config', (_req, res) => {
     require_face_match: s.require_face_match === '1',
     require_wristband_return: s.require_wristband_return === '1',
     enable_accessibility_toolbar: s.enable_accessibility_toolbar === '1',
+    onscreen_keyboard_enabled: s.onscreen_keyboard_enabled !== '0',
+    show_transition_loading: s.show_transition_loading !== '0',
     inactivity_seconds: Number(s.inactivity_seconds || 120)
   });
 });
