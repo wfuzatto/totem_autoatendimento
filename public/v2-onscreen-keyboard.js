@@ -137,6 +137,10 @@
   }
 
   function showKeyboard(mode = 'local', target = null, forcedLayout = null) {
+    if (window.TOTEM_ONSCREEN_KEYBOARD_ENABLED === false) {
+      hideKeyboard();
+      return;
+    }
     ensureKeyboard();
     targetMode = mode;
     activeTarget = mode === 'local' ? target : null;

@@ -118,6 +118,8 @@ function init() {
     require_face_match: '1',
     require_wristband_return: '1',
     enable_accessibility_toolbar: '1',
+    onscreen_keyboard_enabled: '1',
+    show_transition_loading: '1',
     api_provider: 'mock',
     totvs_base_url: '',
     totvs_token: '',
@@ -194,7 +196,7 @@ function getSettings({ includeSecrets = false } = {}) {
 function setSettings(values) {
   const allowed = new Set([
     'hotel_name','theme_skin','allow_item_contest','require_govbr','require_face_match','require_wristband_return',
-    'enable_accessibility_toolbar','api_provider','totvs_base_url','totvs_token','payment_provider','sitef_server',
+    'enable_accessibility_toolbar','onscreen_keyboard_enabled','show_transition_loading','api_provider','totvs_base_url','totvs_token','payment_provider','sitef_server',
     'nfc_mode','printer_mode','webcam_mode','inactivity_seconds'
   ]);
   const stmt = db.prepare(`INSERT INTO settings(key,value,updated_at) VALUES(?,?,CURRENT_TIMESTAMP)

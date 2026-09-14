@@ -467,6 +467,8 @@
             <div class="col-md-6 form-check form-switch ms-2"><input class="form-check-input" type="checkbox" data-setting="require_face_match" ${checked(s.require_face_match)}><label class="form-check-label">Exigir validação facial</label></div>
             <div class="col-md-6 form-check form-switch ms-2"><input class="form-check-input" type="checkbox" data-setting="require_wristband_return" ${checked(s.require_wristband_return)}><label class="form-check-label">Exigir devolução das pulseiras</label></div>
             <div class="col-md-6 form-check form-switch ms-2"><input class="form-check-input" type="checkbox" data-setting="enable_accessibility_toolbar" ${checked(s.enable_accessibility_toolbar)}><label class="form-check-label">Barra de acessibilidade</label></div>
+            <div class="col-md-6 form-check form-switch ms-2"><input class="form-check-input" type="checkbox" data-setting="onscreen_keyboard_enabled" ${checked(s.onscreen_keyboard_enabled)}><label class="form-check-label">Teclado na tela</label></div>
+            <div class="col-md-6 form-check form-switch ms-2"><input class="form-check-input" type="checkbox" data-setting="show_transition_loading" ${checked(s.show_transition_loading)}><label class="form-check-label">Telas de loading</label></div>
           </div>
         </div>
         <div class="admin-section"><h3><i class="bi bi-cloud-arrow-down me-2"></i>Integração hotelaria</h3><div class="row g-3"><div class="col-md-4"><label class="form-label">Provider</label><select class="form-select touch-select" data-setting="api_provider"><option value="mock" ${s.api_provider==='mock'?'selected':''}>Mock / demonstração</option><option value="totvs" ${s.api_provider==='totvs'?'selected':''}>TOTVS Guest API</option></select></div><div class="col-md-8"><label class="form-label">URL base TOTVS</label><input class="form-control touch-input" data-setting="totvs_base_url" value="${esc(s.totvs_base_url)}" placeholder="https://..."></div><div class="col-12"><label class="form-label">Token / credencial</label><input type="password" class="form-control touch-input" data-setting="totvs_token" value="${esc(s.totvs_token || '')}" placeholder="Credencial da API"></div></div></div>
@@ -502,8 +504,9 @@
       const body = {};
       document.querySelectorAll('[data-setting]').forEach(el => { body[el.dataset.setting] = el.type === 'checkbox' ? (el.checked ? '1' : '0') : el.value; });
       await api('/api/admin/settings', { method:'PUT', body:JSON.stringify(body) });
-      state.config = await api('/api/config');
-      hotelName.textContent = state.config.hotel_name;
+        state.config = await api('/api/config');
+        window.TOTEM_ONSCREEN_KEYBOARD_ENABLED = state.config.onscreen_keyboard_enabled !== false;
+        hotelName.textContent = state.config.hotel_name;
       document.getElementById('accessibilityToolbar').style.display = state.config.enable_accessibility_toolbar ? 'flex' : 'none';
       notify('Configurações salvas.');
       adminModal.hide();
